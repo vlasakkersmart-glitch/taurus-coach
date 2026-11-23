@@ -28,6 +28,25 @@ const PUSH=['Duwen','Terug'],PULL=['Trekken','Terug'],LIFT=['Heffen','Laten zakk
    hands/feet: [x,y,z] statisch of {s,e,m?} (m = bochtpunt). rel:'sh'|'chest' =
    [zij, omhoog, voorwaarts] t.o.v. schouder of borst (beweegt met de romp mee).
    lean/twist in graden (+ = voorover / draai naar links). */
+const FLOOR={yaw:0,seat:null,leg:0,floor:true,anchor:{type:'none'},grip:'none'};
+const SUPKNEE={feet:[.12,.05,.86],kPole:[0,1,0]},ARMSIDE={hands:[.30,.05,.22],ePole:[1,1,0]};
+const ABS={
+ ab_deadbug:D(FLOOR,{pelvis:[0,.13,.40],lean:[-89,-89],alt:true,hands:{rel:'sh',s:[0,.02,.62],e:[0,.60,.12]},handsR:{rel:'sh',s:[0,.02,.62],e:[0,.02,.62]},ePole:[1,0,0],
+   feet:[.10,.57,.86],feetR:{s:[-.10,.57,.86],e:[-.10,.20,1.30]},kPole:[0,1,-1],kPoleR:[0,1,-.4],prim:['diep','buik'],sec:['heup'],phase:['Arm en tegenovergesteld been strekken','Terug naar het midden']}),
+ ab_crunch:D(FLOOR,{pelvis:[0,.13,.40],lean:[-88,-55],...SUPKNEE,hands:{rel:'sh',s:[-.12,.26,.04],e:[-.12,.26,.04]},ePole:[1,.4,-.2],prim:['buik'],sec:['schuin'],phase:['Schouders oprollen','Rustig terug']}),
+ ab_plank:D(FLOOR,{pelvis:{s:[0,.27,0],e:[0,.40,0]},lean:[74,90],hands:[.15,.05,.80],ePole:[0,-1,-.4],feet:{s:[.11,.07,-.74],e:[.11,.05,-.90]},kPole:[0,-1,0],footPitch:[75,75],
+   prim:['buik','diep'],sec:['schouders','billen'],phase:['Omhoog in plank','Loslaten'],holdLabel:'Vasthouden',cy:[.7,1.0,3.0,1.0]}),
+ ab_heeltaps:D(FLOOR,{pelvis:[0,.13,.40],lean:[-70,-66],alt:true,feet:[.16,.05,.84],kPole:[.2,1,0],hands:{s:[.32,.12,.22],e:[.24,.08,.72]},handsR:{s:[-.32,.12,.22],e:[-.32,.12,.22]},ePole:[1,.3,0],roll:[0,10],
+   prim:['schuin'],sec:['buik'],phase:['Reiken naar je hiel','Terug']}),
+ ab_bicycle:D(FLOOR,{pelvis:[0,.13,.40],lean:[-70,-70],roll:[16,-16],hands:{rel:'sh',s:[-.12,.26,.04],e:[-.12,.26,.04]},ePole:[1,.4,-.2],
+   feet:{s:[.10,.26,1.30],e:[.10,.44,.62]},feetR:{s:[-.10,.44,.62],e:[-.10,.26,1.30]},kPole:[0,1,-1],kPoleR:[0,1,-1],prim:['schuin','buik'],sec:['heup'],phase:['Knie naar borst, draaien','Wisselen']}),
+ ab_legraise:D(FLOOR,{pelvis:[0,.13,.40],lean:[-89,-89],...ARMSIDE,feet:{s:[.09,.08,1.36],e:[.09,1.02,.52]},kPole:[0,.2,1],footPitch:[0,-75],prim:['buik'],sec:['heup'],phase:['Benen omhoog','Langzaam laten zakken']}),
+ ab_sideplank:D(FLOOR,{pelvis:{s:[0,.15,0],e:[0,.31,0]},lean:[50,72],roll:[-90,-90],hands:[-.26,.05,.40],ePole:[0,-1,.2],handsR:{rel:'sh',s:[0,-.46,.08],e:[0,-.46,.08]},ePoleR:[0,1,.3],
+   feet:[0,.05,-.92],feetR:[0,.15,-.90],kPole:[0,1,0],kPoleR:[0,1,0],prim:['schuin'],sec:['diep','billen','schouders'],phase:['Heup omhoog','Loslaten'],holdLabel:'Vasthouden',cy:[.7,1.0,3.0,1.0]}),
+ ab_birddog:D(FLOOR,{pelvis:[0,.55,0],lean:[73,73],alt:true,hands:{s:[.20,.04,.50],e:[.18,.68,1.12]},handsR:[-.20,.04,.50],ePole:[0,-.2,-1],ePoleR:[0,-.2,-1],
+   feet:[.12,.06,-.46],feetR:{s:[-.12,.06,-.46],e:[-.12,.60,-.96]},kPole:[0,-1,0],kPoleR:[0,-1,0],prim:['diep','onderrug'],sec:['billen','schouders'],phase:['Arm en tegenovergesteld been strekken','Terug']}),
+ ab_revcrunch:D(FLOOR,{pelvis:{s:[0,.13,.40],e:[0,.20,.47]},lean:[-89,-84],...ARMSIDE,feet:{s:[.10,.57,.86],e:[.10,.66,.40]},kPole:[0,1,-1],prim:['buik'],sec:['heup'],phase:['Knieën naar je borst','Rustig terug']}),
+ ab_bridge:D(FLOOR,{pelvis:{s:[0,.13,.40],e:[0,.44,.40]},lean:[-89,-123],...SUPKNEE,hands:[.30,.05,.06],ePole:[1,1,0],prim:['billen'],sec:['hamstrings','onderrug'],phase:['Heupen omhoog','Rustig laten zakken']})};
 const SP={
 32:D(SEAT_OUT,{lean:[-5,-5],hands:{s:[.29,1.10,.12],e:[.19,1.13,.70]},ePole:[1,-.35,-.6],anchor:{type:'arm',p:[.62,1.10,0]},grip:'x',prim:['borst'],sec:['triceps','schouders'],phase:PUSH,
   err:{label:'Rug los van de leuning, schouders naar voren',lean:[-5,16]}}),
@@ -145,6 +164,8 @@ function buildHuman(scene,M){const g=new T.Group();scene.add(g);const P={};
   mk('rug',sph,[.13,.02,-.05],[.05,.14,.07]);mk('rug',sph,[-.13,.02,-.05],[.05,.14,.07]);mk('rug',sph,[0,.19,-.08],[.12,.06,.04]);
   mk('onderrug',sph,[.05,-.14,-.09],[.04,.08,.03]);mk('onderrug',sph,[-.05,-.14,-.09],[.04,.08,.03]);
   mk('buik',new T.BoxGeometry(1,1,1),[0,-.10,.10],[.13,.20,.03]);
+  mk('schuin',sph,[.15,-.08,.06],[.045,.12,.06]);mk('schuin',sph,[-.15,-.08,.06],[.045,.12,.06]);
+  mk('diep',sph,[0,-.17,.075],[.17,.07,.035]);
   P.ov=ov;return{g,P}}
 
 /* ---------- pose ---------- */
@@ -153,11 +174,12 @@ function pose(H,sp,p){const P=H.P;
   const fwd0=new V(Math.sin(sp.yaw),0,Math.cos(sp.yaw)),xa0=new V(Math.cos(sp.yaw),0,-Math.sin(sp.yaw));const sgn=Math.cos(sp.yaw)<-.5?-1:1;
   const fwd=fwd0.clone().applyAxisAngle(UP,tw),xa=xa0.clone().applyAxisAngle(UP,tw);
   const spine=UP.clone().multiplyScalar(Math.cos(lean)).add(fwd.clone().multiplyScalar(Math.sin(lean)));
-  const chestF=xa.clone().cross(spine);const sv=xa.clone().multiplyScalar(sgn),sv0=xa0.clone().multiplyScalar(sgn);
+  const roll=rng(sp.roll,p)*PI/180;if(roll)xa.applyAxisAngle(spine,roll);
+  const chestF=xa.clone().cross(spine);const sv=xa.clone().multiplyScalar(sgn),sv0=(sp.roll?xa:xa0).clone().multiplyScalar(sgn);
   const pelv=new V(...at(sp.pelvis,p)),C=pelv.clone().add(spine.clone().multiplyScalar(B.torso));
-  const q=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(xa,spine,chestF));
+  const q=new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(xa,spine,chestF));const spineP=sp.floor?spine:UP,xaP=sp.floor?xa:xa0;
   P.torso.position.copy(pelv).add(C).multiplyScalar(.5);P.torso.quaternion.copy(q);
-  P.pel.position.copy(pelv).add(spine.clone().multiplyScalar(-.02));P.pel.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(xa0,UP,xa0.clone().cross(UP)));
+  P.pel.position.copy(pelv).add(spine.clone().multiplyScalar(-.02));P.pel.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(xaP,spineP,xaP.clone().cross(spineP)));
   const head=C.clone().add(spine.clone().multiplyScalar(.24));place(P.neck,C.clone().add(spine.clone().multiplyScalar(.04)),head.clone().add(spine.clone().multiplyScalar(-.08)));P.head.position.copy(head);
   const out={hand:{},foot:{}};
   for(const s of[1,-1]){const k=s>0?'L':'R';const own=s<0;
@@ -177,11 +199,15 @@ function pose(H,sp,p){const P=H.P;
     P['foot'+k].quaternion.copy(fq);const off=new V(0,-.035,.07).applyQuaternion(fq);P['foot'+k].position.copy(rl.H).add(off)}
   out.fwd0=fwd0;return out}
 
+/* wisselende kant (dead bug, bird dog, heel taps): links/rechts spiegelen */
+function mirSpec(v){if(!v)return v;if(Array.isArray(v))return[-v[0],v[1],v[2]];const o={...v};['s','e','m'].forEach(k=>{if(o[k])o[k]=[-o[k][0],o[k][1],o[k][2]]});return o}
+function swapSides(sp){const o={...sp};const pairs=[['hands','handsR'],['feet','feetR'],['ePole','ePoleR'],['kPole','kPoleR']];
+  for(const [a,b] of pairs){const A=sp[a],Bv=sp[b];if(Bv===undefined||A===undefined)continue;o[a]=mirSpec(Bv);o[b]=mirSpec(A)}return o}
 /* ---------- mount ---------- */
 let cur=null;
 function unmount(){if(!cur)return;cancelAnimationFrame(cur.raf);window.removeEventListener('resize',cur.onR);try{cur.renderer.dispose();cur.scene.traverse(o=>{if(o.geometry)o.geometry.dispose()})}catch(e){}cur=null}
 const DEFAULT_CABLES={arm:[['armL','handL'],['armR','handR']],tower:[['topL','barL'],['topR','barR']],towerH:[['topL','handL'],['topR','handR']],low:[['lowL','handL'],['lowR','handR']],lowbar:[['lowL','barL'],['lowR','barR']],none:[]};
-const MUSNL={borst:'borst',rug:'rug',schouders:'schouders',triceps:'triceps',biceps:'biceps',buik:'buik',quads:'quadriceps',hamstrings:'hamstrings',kuiten:'kuiten',billen:'bilspieren',heup:'heup',onderrug:'onderrug',onderarmen:'onderarmen'};
+const MUSNL={schuin:'schuine buikspieren',diep:'diepe buikspier',borst:'borst',rug:'rug',schouders:'schouders',triceps:'triceps',biceps:'biceps',buik:'buik',quads:'quadriceps',hamstrings:'hamstrings',kuiten:'kuiten',billen:'bilspieren',heup:'heup',onderrug:'onderrug',onderarmen:'onderarmen'};
 async function mount(el,n){unmount();const base=SP[n];if(!base)return;
   el.innerHTML='<div style="height:300px;display:grid;place-items:center;color:#8d95a5;font-size:13px">3D-model laden…</div>';
   try{await loadThree()}catch(e){el.innerHTML='<div class="small mut" style="padding:14px">'+e.message+' De foto\'s en instructies hieronder werken wel.</div>';return}
@@ -197,7 +223,7 @@ async function mount(el,n){unmount();const base=SP[n];if(!base)return;
    <div class="seg" style="flex:1;min-width:150px">${[.5,1,1.5].map(v=>`<button data-c="spd" data-v="${v}" class="${v===1?'on':''}">${String(v).replace('.',',')}×</button>`).join('')}</div>
    <div class="seg" style="flex:1;min-width:170px">${[['voor','Voor'],['zij','Zij'],['schuin','Schuin']].map(([k,l])=>`<button data-c="view" data-v="${k}" class="${k==='schuin'?'on':''}">${l}</button>`).join('')}</div></div>
   <div class="row" style="gap:8px;margin-top:8px"><span class="tiny mut">Start</span><input type="range" min="0" max="100" value="0" data-c="scrub" style="flex:1"><span class="tiny mut">Eind</span></div>
-  <div class="row sp" style="margin-top:6px"><label class="row small"><input type="checkbox" data-c="err"> Veelgemaakte fout tonen</label><span class="tiny mut">Schematisch model · houding volgens handleidingfoto's</span></div>`;
+  <div class="row sp" style="margin-top:6px">${base.err?'<label class="row small"><input type="checkbox" data-c="err"> Veelgemaakte fout tonen</label>':'<span></span>'}<span class="tiny mut">${base.floor?'3D-model · oranje = spieren die je traint':"Schematisch model · houding volgens handleidingfoto's"}</span></div>`;
   const cv=el.querySelector('canvas'),W=()=>cv.clientWidth||320,Hh=320;
   const renderer=new T.WebGLRenderer({canvas:cv,antialias:true});renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.setSize(W(),Hh,false);renderer.outputEncoding=T.sRGBEncoding;
   const scene=new T.Scene();scene.background=new T.Color(0x151821);
@@ -209,7 +235,7 @@ async function mount(el,n){unmount();const base=SP[n];if(!base)return;
   const M={frame:std(0xc3c8d0,.55,.35),plate:std(0xdfe2e6,.1,.6),pad:std(0x22252b,.05,.85),dark:std(0x111215,.3,.5),cyl:std(0x3a3d44,.4,.4),
     skin:std(0xcfd3da,.05,.7),shirt:std(0x3b4150,.05,.8),short:std(0x2a2e37,.05,.85),shoe:std(0xe6e8ec,.05,.6),cable:std(0x101114,.2,.6),grip:std(0x15171b,.1,.8),
     mus:k=>musMats[k]||(musMats[k]=new T.MeshStandardMaterial({color:isP(k)?0xff5a2a:0xffb26b,emissive:isP(k)?0xff3d00:0xff9a3d,emissiveIntensity:.3,roughness:.6,transparent:true,opacity:.92}))};
-  const st=buildStation(scene,base,M);const H=buildHuman(scene,M);
+  const st=base.floor?{pts:{}}:buildStation(scene,base,M);if(base.floor){const mat=new T.Mesh(new T.BoxGeometry(.62,.012,1.9),std(0x4c4f8a,.05,.9));mat.position.set(0,.006,.25);scene.add(mat)}const H=buildHuman(scene,M);
   const act=[...(base.prim||[]),...(base.sec||[])];for(const k in H.P.ov)H.P.ov[k].forEach(m=>m.visible=act.includes(k));
   const tint=(keys,parts)=>{const k=keys.find(x=>act.includes(x));if(k)for(const s of['L','R'])parts.forEach(pp=>H.P[pp+s].material=M.mus(k))};
   tint(['triceps','biceps'],['ua']);tint(['onderarmen'],['fa']);tint(['schouders'],['delt']);tint(['quads','hamstrings','heup'],['th']);tint(['kuiten'],['sh']);
@@ -221,15 +247,15 @@ async function mount(el,n){unmount();const base=SP[n];if(!base)return;
   const straps={};const mkStrap=k=>{const sm=new T.Mesh(new T.TorusGeometry(.05,.012,8,16),M.dark);scene.add(sm);straps[k]=sm};
   cabList.forEach(([,to])=>{if(to.startsWith('hand')&&base.grip!=='none'&&base.grip!=='bar')mkGrip(to);if(to.startsWith('foot'))mkStrap(to)});
   let roller=null;if(base.legDyn){roller=new T.Mesh(new T.CylinderGeometry(.055,.055,.40,18),M.pad);scene.add(roller)}
-  const tgt=new V(0,1.0,.40);let th=.75,ph=1.22,rad=3.0;
+  const tgt=base.floor?new V(0,.38,.20):new V(0,1.0,.40);let th=.75,ph=1.22,rad=base.floor?2.9:3.0;
   const VIEWS={voor:[0,1.32],zij:[PI/2,1.32],schuin:[.75,1.2]};const setView=k=>{[th,ph]=VIEWS[k]};
   const camUpd=()=>{cam.position.set(tgt.x+rad*Math.sin(ph)*Math.sin(th),tgt.y+rad*Math.cos(ph),tgt.z+rad*Math.sin(ph)*Math.cos(th));cam.lookAt(tgt)};
   let drag=null;cv.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,th,ph];try{cv.setPointerCapture(e.pointerId)}catch(x){}});
   cv.addEventListener('pointermove',e=>{if(!drag)return;th=drag[2]-(e.clientX-drag[0])*.01;ph=Math.max(.35,Math.min(1.55,drag[3]-(e.clientY-drag[1])*.006))});
   cv.addEventListener('pointerup',()=>drag=null);cv.addEventListener('pointercancel',()=>drag=null);
-  const CY=[.5,1.2,.5,2.0],TOT=CY.reduce((a,b)=>a+b);let t=0,speed=1,playing=true,errOn=false,last=performance.now(),pManual=null;
+  const CY=base.cy||[.5,1.2,.5,2.0],TOT=CY.reduce((a,b)=>a+b);let t=0,speed=1,playing=true,errOn=false,last=performance.now(),pManual=null;
   const R=k=>el.querySelector(`[data-r="${k}"]`);const ph2=base.phase||['Uitvoeren','Terug'];
-  const state=tt=>{let x=tt%TOT;if(x<CY[0])return[0,'Startpositie',''];x-=CY[0];if(x<CY[1])return[ease(x/CY[1]),ph2[0],'uit'];x-=CY[1];if(x<CY[2])return[1,'Kort vasthouden',''];x-=CY[2];return[1-ease(x/CY[3]),ph2[1],'in']};
+  const state=tt=>{let x=tt%TOT;if(x<CY[0])return[0,'Startpositie',''];x-=CY[0];if(x<CY[1])return[ease(x/CY[1]),ph2[0],'uit'];x-=CY[1];if(x<CY[2])return[1,base.holdLabel||'Kort vasthouden',base.holdLabel?'rustig':''];x-=CY[2];return[1-ease(x/CY[3]),ph2[1],'in']};
   el.addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;const c=b.dataset.c;
     if(c==='play'){playing=!playing;pManual=null;b.textContent=playing?'❚❚':'▶'}
     if(c==='spd'){speed=+b.dataset.v;b.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b))}
@@ -240,8 +266,8 @@ async function mount(el,n){unmount();const base=SP[n];if(!base)return;
   function frame(now){if(!el.isConnected){unmount();return}
     const dt=Math.min(.1,(now-last)/1000);last=now;if(playing)t+=dt*speed;
     let p,lab,br;if(pManual!=null){p=pManual;lab=p<.02?'Startpositie':p>.98?'Eindpositie':'Stap voor stap';br=''}else[p,lab,br]=state(t);
-    R('phase').textContent=lab;const b=R('breath');b.style.display=br?'':'none';b.textContent=br==='uit'?'Adem uit':'Adem in';
-    const sp=errOn&&base.err?Object.assign({},base,base.err):base;const o=pose(H,sp,p);
+    R('phase').textContent=lab;const b=R('breath');b.style.display=br?'':'none';b.textContent=br==='uit'?'Adem uit':br==='rustig'?'Rustig doorademen':'Adem in';
+    let sp=errOn&&base.err?Object.assign({},base,base.err):base;if(base.alt&&pManual==null&&Math.floor(t/TOT)%2)sp=swapSides(sp);const o=pose(H,sp,p);
     const pts=Object.assign({},st.pts,{handL:o.hand.L,handR:o.hand.R,footL:o.foot.L,footR:o.foot.R,handsMid:o.hand.L.clone().add(o.hand.R).multiplyScalar(.5)});
     if(bar){const c=o.hand.L.clone().add(o.hand.R).multiplyScalar(.5);const ax=o.hand.L.clone().sub(o.hand.R).normalize();bar.position.copy(c);bar.quaternion.setFromUnitVectors(UP,ax);
       const a2=(base.anchor.at||.15);pts.barL=c.clone().add(ax.clone().multiplyScalar(a2));pts.barR=c.clone().add(ax.clone().multiplyScalar(-a2))}
@@ -255,5 +281,6 @@ async function mount(el,n){unmount();const base=SP[n];if(!base)return;
   cur={renderer,scene,onR,raf:0};cur.raf=requestAnimationFrame(frame);
   // test-hook (alleen voor ontwikkeling)
   cur.debug=(pp,thv,err)=>{if(thv!=null)th=thv;playing=false;pManual=pp;errOn=!!err;frame(performance.now());cancelAnimationFrame(cur.raf)}}
-window.TaurusAnim={has:n=>!!SP[n],list:Object.keys(SP).map(Number),mount,unmount,debug:(p,th,err)=>cur&&cur.debug(p,th,err)};
+Object.assign(SP,ABS);
+window.TaurusAnim={has:n=>!!SP[n],list:Object.keys(SP).filter(k=>!isNaN(k)).map(Number),mount,unmount,debug:(p,th,err)=>cur&&cur.debug(p,th,err)};
 })();
