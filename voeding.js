@@ -67,7 +67,7 @@ const DEF=()=>({v:1,people:{k:{excl:['kaas','geraspt','olijven','kiwi','amandel'
   p:{excl:['ei','ui','knoflook','aardappel','pasta','rijst','melk','whey','skyr'],gluten:true,kcal:1500,prot:110}},
  taste:{k:{ing:{},meal:{}},p:{ing:{},meal:{}}},base:null,over:{},shifts:[],shiftExtra:{},
  pp:{travel:30,eatLead:45,breakEvening:'19:30',breakNight:'02:00',wake:'',dinner:'18:00',winFrom:'17:00',winTo:'19:00',avond:['15:00','23:00'],nacht:['22:00','07:00']},
- roster:{src:'manual',entity:'',kw:{avond:'avond',nacht:'nacht',dag:'dag'},consent:null,lastSync:null,err:''},ui:{seg:'week',wk:0,tp:'k'},abs:null,vary:true});
+ roster:{src:'manual',entity:'calendar.werk',allShifts:true,kw:{avond:'avond',nacht:'nacht',dag:'dag'},consent:null,lastSync:null,err:''},ui:{seg:'week',wk:0,tp:'k'},abs:null,vary:true});
 let F=DEF();
 async function load(){try{const v=await idbGet('family');if(v){const d=JSON.parse(v);F={...DEF(),...d,pp:{...DEF().pp,...(d.pp||{})},roster:{...DEF().roster,...(d.roster||{})},ui:{...DEF().ui,...(d.ui||{})}}}}catch(e){}if(!F.base)F.base=genBase();}
 let svT=null;function save(){clearTimeout(svT);svT=setTimeout(()=>idbSet('family',JSON.stringify(F)).catch(()=>{}),200)}
@@ -151,12 +151,14 @@ function dayPlan(ds){const dow=dowOf(ds),pp=F.pp,dayAbs=absMin(ds+'T00:00');cons
 function kcalDay(p){let k=0,unk=0;p.items.filter(x=>x.who.includes('k')).forEach(x=>{const m=M[x.meal];if(x.ingK||!m||!m.kk)unk++;else k+=m.kk});return{k,unk}}
 
 /* ---------- agenda via Home Assistant ---------- */
-function classify(sum){const s=(sum||'').toLowerCase();const kw=F.roster.kw;for(const t of ['nacht','avond','dag']){const ks=(kw[t]||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);if(ks.some(k=>s.includes(k)))return t}return null}
+/* Type van een dienst: eerst op naam; staan alle diensten als 'Werken' in de agenda, dan op begintijd (Amsterdam-tijd). */
+function typeByTime(start,end){const h=tm(start.slice(11))/60;const over=end&&end.slice(0,10)>start.slice(0,10);if(h>=20||(over&&h>=18)||h<4)return'nacht';if(h>=12)return'avond';return'dag'}
+function classify(sum,start,end){const s=(sum||'').toLowerCase();const kw=F.roster.kw;for(const t of ['nacht','avond','dag']){const ks=(kw[t]||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);if(ks.some(k=>s.includes(k)))return t}
+  return F.roster.allShifts&&start?typeByTime(start,end):null}
 async function syncCal(){const R=F.roster;if(!R.entity||!R.consent)return{err:'Kies eerst een agenda en geef toestemming.'};if(!window.HEALTH||!HEALTH.haGet)return{err:'Koppel eerst Home Assistant (Gezondheid → Koppelen).'};
   const from=new Date(Date.now()-2*864e5),to=new Date(Date.now()+28*864e5);
   try{const ev=await HEALTH.haGet(`/api/calendars/${encodeURIComponent(R.entity)}?start=${encodeURIComponent(from.toISOString())}&end=${encodeURIComponent(to.toISOString())}`);
-    const got=[];for(const e of ev||[]){if(!e.start||!e.start.dateTime)continue;const type=classify(e.summary);if(!type)continue;
-      const start=ams(new Date(e.start.dateTime)),end=ams(new Date(e.end.dateTime));const id='ha:'+(e.uid||'')+(e.recurrence_id||'')+'@'+(e.uid?'':start+e.summary);got.push({id,type,start,end,src:'ha',title:e.summary})}
+    const got=[];for(const e of ev||[]){if(!e.start||!e.start.dateTime)continue;const start=ams(new Date(e.start.dateTime)),end=ams(new Date(e.end.dateTime));const type=classify(e.summary,start,end);if(!type)continue;const id='ha:'+(e.uid||'')+(e.recurrence_id||'')+'@'+(e.uid?'':start+e.summary);got.push({id,type,start,end,src:'ha',title:e.summary})}
     const lo=ams(from).slice(0,10),hi=ams(to).slice(0,10);const before=F.shifts.filter(s=>s.src==='ha');
     const keep=F.shifts.filter(s=>s.src!=='ha'||s.start.slice(0,10)<lo||s.start.slice(0,10)>hi);
     const changes={nieuw:got.filter(g=>!before.some(b=>b.id===g.id)).length,gewijzigd:got.filter(g=>before.some(b=>b.id===g.id&&(b.start!==g.start||b.end!==g.end))).length,vervallen:before.filter(b=>b.start.slice(0,10)>=lo&&b.start.slice(0,10)<=hi&&!got.some(g=>g.id===b.id)).length};
@@ -206,6 +208,7 @@ function vRooster(){const pp=F.pp,R=F.roster;const up=shiftsAll().filter(s=>s.en
    <button class="btn sm" style="margin-top:8px" data-a="v_cals">Agenda's in Home Assistant zoeken</button><div id="v_calmsg" class="small" style="margin-top:6px"></div>
    <label class="lb">Agenda (entity)</label><input class="f" id="v_ent" value="${E(R.entity)}" placeholder="calendar.patricia_werk" autocapitalize="off">
    <div class="grid2"><div><label class="lb">Avonddienst heet</label><input class="f" id="v_kwa" value="${E(R.kw.avond)}"></div><div><label class="lb">Nachtdienst heet</label><input class="f" id="v_kwn" value="${E(R.kw.nacht)}"></div></div>
+   <label class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="v_all" ${R.allShifts?'checked':''} style="margin-top:3px"><span class="small">Elke afspraak in deze agenda is een dienst (bijv. alles heet "Werken"). Type op begintijd: vanaf 20:00 nacht, vanaf 12:00 avond, anders dag.</span></label>
    <label class="lb">Dagdienst heet (optioneel)</label><input class="f" id="v_kwd" value="${E(R.kw.dag)}"><div class="tiny mut" style="margin-top:4px">Meerdere woorden scheiden met een komma. Afspraken zonder deze woorden worden genegeerd.</div>
    <label class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="v_cons" ${R.consent?'checked':''} style="margin-top:3px"><span class="small">Patricia vindt het goed dat de app haar werkafspraken uit deze agenda leest. Alleen titel, begin en eind van diensten worden op dit apparaat bewaard.</span></label>
    <div class="row" style="gap:8px;margin-top:10px"><button class="btn pri grow" data-a="v_calsave">Opslaan en ophalen</button>${R.src==='ha'?'<button class="btn" data-a="v_sync">Nu ophalen</button>':''}</div>
@@ -289,7 +292,7 @@ document.addEventListener('click',async ev=>{const t=ev.target.closest('[data-a^
   else if(a==='s_del'){if(!confirm('Deze dienst verwijderen? De maaltijden worden opnieuw berekend.'))return;F.shifts=F.shifts.filter(x=>x.id!==SH.id);save();closeSheet();render()}
   else if(a==='v_cals'){const m=document.getElementById('v_calmsg');try{if(!HEALTH.haGet)throw new Error('Koppel eerst Home Assistant via Gezondheid.');m.textContent='Zoeken…';const cs=await HEALTH.haGet('/api/calendars');m.innerHTML='Gevonden: '+cs.map(c=>`<button class="chip" style="margin:3px" data-a="v_pickcal" data-k="${E(c.entity_id)}">${E(c.name||c.entity_id)}</button>`).join('')+'<div class="tiny mut">Staat haar werkagenda er niet tussen? Voeg die eerst toe in Home Assistant.</div>'}catch(e){m.textContent=e.message}}
   else if(a==='v_pickcal'){document.getElementById('v_ent').value=k}
-  else if(a==='v_calsave'||a==='v_sync'){const g=id=>document.getElementById(id);if(g('v_ent')){F.roster.entity=g('v_ent').value.trim();F.roster.kw={avond:g('v_kwa').value,nacht:g('v_kwn').value,dag:g('v_kwd').value};F.roster.consent=g('v_cons').checked?(F.roster.consent||new Date().toISOString()):null}
+  else if(a==='v_calsave'||a==='v_sync'){const g=id=>document.getElementById(id);if(g('v_ent')){F.roster.entity=g('v_ent').value.trim();F.roster.kw={avond:g('v_kwa').value,nacht:g('v_kwn').value,dag:g('v_kwd').value};F.roster.allShifts=g('v_all').checked;F.roster.consent=g('v_cons').checked?(F.roster.consent||new Date().toISOString()):null}
     F.roster.src='ha';save();toast('Ophalen…');const r=await syncCal();toast(r.err?'Mislukt: '+r.err:`${r.n} diensten gevonden (nieuw ${r.changes.nieuw}, gewijzigd ${r.changes.gewijzigd}, vervallen ${r.changes.vervallen}).`,5000);render()}});
 document.addEventListener('change',ev=>{const t=ev.target;if(t.dataset.vp!=null){F.pp[t.dataset.vp]=t.type==='number'?+t.value:t.value;if(t.dataset.vp==='dinner')F.base.forEach(d=>d.forEach(x=>{if(x.id==='diner')x.time=t.value}));save();render()}
   else if(t.dataset.vk!=null){F.people.k[t.dataset.vk]=+t.value;save()}

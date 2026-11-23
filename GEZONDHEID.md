@@ -25,3 +25,12 @@ Een website kan zelf geen meldingen sturen als hij dicht is. Via Home Assistant 
 2. Kopieer de automatisering uit dat scherm naar Home Assistant: Instellingen → Automatiseringen → Nieuw → YAML. Vervang `JOUW_IPHONE` door de naam van je iPhone. Die vind je via Ontwikkelaarshulpmiddelen → Acties → zoek op "notify.mobile_app".
 
 Om 18:30 krijg je dan een melding als je die dag nog moet trainen. Tik je op de melding, dan opent de app.
+
+## Back-up in Home Assistant (geen iCloud nodig)
+
+1. In Taurus Coach ga je naar Gezondheid → Beheren en zet je "Back-up in Home Assistant" aan. Daarna tik je op Opslaan.
+2. Na elke training, en minstens één keer per dag, bewaart de app een volledige back-up in je eigen Home Assistant. Hij komt in de gebruikersgegevens van de HA-gebruiker van je token, en blijft bewaard als HA herstart.
+3. Terugzetten (bijvoorbeeld op een nieuwe telefoon): open de app, tik op het welkomstscherm op "Herstellen uit Home Assistant", vul je URL en token in, en kies de back-up.
+
+Bewaar je token op een veilige plek, bijvoorbeeld in je wachtwoordbeheerder, zodat je het bij het herstellen bij de hand hebt.
+Een lege of kleinere stand overschrijft nooit een vollere back-up in Home Assistant.

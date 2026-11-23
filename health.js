@@ -7,19 +7,21 @@
 'use strict';
 const DAY=864e5;
 const METRICS={
-  weight:  {l:'Gewicht',u:'kg',grp:'body',src:'FITAGE-weegschaal',kw:['weight','gewicht'],units:['kg','lb','lbs'],excl:['bmi','estimat','ideal','target','doel','fat','vet','muscle','spier','bone','bot','water','lean','vetvrij'],dec:1,agg:'mean',thr:.2},
+  weight:  {l:'Gewicht',u:'kg',grp:'body',src:'FITAGE-weegschaal',kw:['weight','gewicht'],units:['kg','lb','lbs'],excl:['bmi','estimat','ideal','target','doel','goal','recommend','control','profile','fat','vet','muscle','spier','bone','bot','water','lean','vetvrij'],dec:1,agg:'mean',thr:.2},
   fat:     {l:'Vetpercentage',u:'%',grp:'body',src:'FITAGE-weegschaal',kw:['body_fat','bodyfat','fat_percent','vetpercentage','lichaamsvet',' fat','_fat'],units:['%'],excl:['visceral','visceraal','mass','massa'],dec:1,agg:'mean',thr:.3,est:true},
+  fatmass: {l:'Vetmassa',u:'kg',grp:'body',src:'FITAGE-weegschaal',kw:['body_fat_mass','fat_mass','vetmassa'],units:['kg'],dec:1,agg:'mean',thr:.2,est:true},
+  lean:    {l:'Vetvrije massa',u:'kg',grp:'body',src:'FITAGE-weegschaal',kw:['fat_free','lean_mass','vetvrij'],units:['kg'],dec:1,agg:'mean',thr:.2,est:true},
   muscle:  {l:'Spiermassa',u:'kg',grp:'body',src:'FITAGE-weegschaal',kw:['muscle','spier'],units:['kg','%'],excl:['skeletal_muscle_rate'],dec:1,agg:'mean',thr:.2,est:true},
   water:   {l:'Lichaamsvocht',u:'%',grp:'body',src:'FITAGE-weegschaal',kw:['water','vocht'],units:['%'],dec:1,agg:'mean',thr:.4,est:true},
   visceral:{l:'Visceraal vet',u:'',grp:'body',src:'FITAGE-weegschaal',kw:['visceral','visceraal'],units:['','level','niveau'],dec:0,agg:'mean',thr:.3,est:true},
-  hr:      {l:'Hartslag',u:'bpm',grp:'heart',src:'Apple Watch via HA',kw:['heart_rate','heartrate','hartslag'],units:['bpm','beats/min','count/min','/min','slagen/min'],excl:['resting','rust','walking','lopen','wandel','variab','hrv','average','gemiddel'],dec:0,agg:'mean',thr:9e9},
+  hr:      {l:'Hartslag',u:'bpm',grp:'heart',src:'Apple Watch via HA',kw:['heart_rate','heartrate','hartslag'],units:['bpm','beats/min','count/min','/min','slagen/min'],excl:['resting','rust','walking','lopen','wandel','variab','hrv','average','gemiddel','weegschaal','scale','fitage'],dec:0,agg:'mean',thr:9e9},
   rhr:     {l:'Rusthartslag',u:'bpm',grp:'heart',src:'Apple Watch via HA',kw:['resting_heart','resting heart','rusthartslag','resting'],units:['bpm','beats/min','count/min','/min','slagen/min'],dec:0,agg:'last',thr:1},
   hrv:     {l:'Hartslagvariabiliteit (HRV)',u:'ms',grp:'heart',src:'Apple Watch via HA',kw:['variability','hrv'],units:['ms'],dec:0,agg:'last',thr:2},
   sleep:   {l:'Slaap',u:'u',grp:'sleep',src:'Apple Watch via HA',kw:['sleep','slaap'],units:['h','hr','hrs','uur','min','s'],excl:['awake','wakker','in_bed','in bed','core','deep','diep','rem','start','end','eind'],dec:1,agg:'last',thr:.25},
   steps:   {l:'Stappen',u:'',grp:'activity',src:'iPhone/Apple Watch via HA',kw:['steps','stappen'],units:['steps','stappen',''],excl:['floor','verdieping'],dec:0,agg:'max',thr:500},
   energy:  {l:'Actieve energie',u:'kcal',grp:'activity',src:'Apple Watch via HA',kw:['active_energy','active energy','actieve energie','actieve_energie'],units:['kcal','cal','kj'],dec:0,agg:'max',thr:50}
 };
-const ORDER=['weight','fat','muscle','water','visceral','rhr','hrv','sleep','hr','steps','energy'];
+const ORDER=['weight','fat','fatmass','lean','muscle','water','visceral','rhr','hrv','sleep','hr','steps','energy'];
 let CFG=null,HD=null,PID=null,busy=false,lastErr='';
 const emptyCfg=()=>({url:'',token:'',consent:null,map:{},units:{},cands:null});
 const emptyHD=()=>({v:1,series:{},daily:{},lastOk:null,lastTry:null,lastErr:'',log:[],shown:{}});
@@ -79,12 +81,16 @@ function conv(m,v,unit){unit=(unit||'').toLowerCase();
   if(m==='energy'&&unit==='kj')return v/4.184;
   if(m==='energy'&&unit==='cal'&&v>20000)return v/1000;
   return v}
-function plausible(m,v){const R={weight:[25,300],fat:[2,70],muscle:[5,150],water:[20,85],visceral:[0,60],hr:[25,240],rhr:[25,140],hrv:[1,400],sleep:[0,18],steps:[0,150000],energy:[0,10000]}[m];return R?v>=R[0]&&v<=R[1]:true}
+function plausible(m,v){const R={fatmass:[1,150],lean:[15,150],weight:[25,300],fat:[2,70],muscle:[5,150],water:[20,85],visceral:[0,60],hr:[25,240],rhr:[25,140],hrv:[1,400],sleep:[0,18],steps:[0,150000],energy:[0,10000]}[m];return R?v>=R[0]&&v<=R[1]:true}
 function addSamples(m,arr){const s=HD.series[m]||(HD.series[m]=[]);const seen=new Set(s.map(p=>p[0]));let n=0;
   for(const [t,v] of arr){const tt=Math.round(t/1000)*1000;if(seen.has(tt))continue;
     if(m==='weight'&&s.some(p=>Math.abs(p[0]-tt)<180e3&&Math.abs(p[1]-v)<0.05))continue; // zelfde weging dubbel gemeld
     s.push([tt,v]);seen.add(tt);n++}
   s.sort((a,b)=>a[0]-b[0]);return n}
+/* Geen vetpercentage-sensor, wel vetmassa + gewicht: percentage berekenen per weging (gelabeld als berekend). */
+function deriveFat(){if(CFG.map.fat||!HD.series.fatmass||!HD.series.weight)return;const W=HD.series.weight;const pts=[];
+  for(const [t,m] of HD.series.fatmass){const w=W.find(p=>Math.abs(p[0]-t)<10*6e4);if(w&&w[1]>0)pts.push([t,m/w[1]*100])}
+  if(pts.length){addSamples('fat',pts);HD.fatDerived=true}}
 function prune(){const cut=Date.now()-120*DAY;const s=HD.series.hr;if(!s||!s.length||s[0][0]>=cut)return;
   const old=s.filter(p=>p[0]<cut);const by={};old.forEach(p=>{const k=dkey(p[0]);(by[k]=by[k]||[]).push(p[1])});
   const d=HD.daily.hr||(HD.daily.hr={});for(const k in by)if(!d[k])d[k]=by[k].reduce((a,b)=>a+b,0)/by[k].length;
@@ -104,6 +110,8 @@ function trend(m,from){const pts=inRange(m,from);if(pts.length<4)return null;con
 const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
 const median=a=>{if(!a.length)return null;const b=[...a].sort((x,y)=>x-y);const i=b.length>>1;return b.length%2?b[i]:(b[i-1]+b[i])/2};
 
+/* weegbereik per profiel: standaard rond je profielgewicht */
+function range(){if(CFG.wr&&CFG.wr[0]<CFG.wr[1])return CFG.wr;const w=(typeof S!=='undefined'&&S.profile&&+S.profile.weight)||75;return w>=78?[78,115]:[Math.max(40,Math.round(w-12)),Math.round(w+10)]}
 /* ---------- synchronisatie ---------- */
 async function sync(opts={}){if(busy)return{skip:true};if(!configured()){return{err:'Niet gekoppeld'}}
   busy=true;HD.lastTry=Date.now();refreshStatus();const now=Date.now();const map=CFG.map;const ids=Object.values(map).filter(Boolean);const added={};
@@ -111,15 +119,21 @@ async function sync(opts={}){if(busy)return{skip:true};if(!configured()){return{
     const first=!HD.lastOk||opts.full;const since=first?now-10*DAY:HD.lastOk-3*3600e3;
     const path='/api/history/period/'+encodeURIComponent(new Date(since).toISOString())+'?filter_entity_id='+encodeURIComponent(ids.join(','))+'&end_time='+encodeURIComponent(new Date(now).toISOString())+'&minimal_response&no_attributes';
     const res=await ha(path);
+    /* Gedeelde weegschaal: alleen wegingen binnen MIJN weegbereik horen bij mij; vet-/spierwaarden alleen als ze bij zo'n weging horen. */
+    const wr=range();const wArr=(res||[]).find(a=>a&&a.length&&a[0].entity_id===map.weight)||[];const rawW=[];
+    for(const r of wArr){const v=conv('weight',parseFloat(r.state),CFG.units.weight);const t=Date.parse(r.last_changed||r.last_updated);if(!isNaN(v)&&t&&v>0)rawW.push([t,v])}
+    const mine=t=>{const near=rawW.filter(p=>Math.abs(p[0]-t)<10*6e4);return near.length&&near.some(p=>p[1]>=wr[0]&&p[1]<=wr[1])};let skipped=0;
     for(const arr of (res||[])){if(!arr||!arr.length)continue;const eid=arr[0].entity_id;const ms=Object.keys(map).filter(k=>map[k]===eid);
-      for(const m of ms){const unit=CFG.units[m]||'';const pts=[];for(const r of arr){const v=parseFloat(r.state);if(isNaN(v))continue;const t=Date.parse(r.last_changed||r.last_updated);if(!t)continue;const cv=conv(m,v,unit);if(plausible(m,cv))pts.push([t,cv])}
+      for(const m of ms){const unit=CFG.units[m]||'';const pts=[];for(const r of arr){const v=parseFloat(r.state);if(isNaN(v))continue;const t=Date.parse(r.last_changed||r.last_updated);if(!t)continue;const cv=conv(m,v,unit);if(!plausible(m,cv))continue;
+          if(METRICS[m].grp==='body'&&map.weight){if(m==='weight'?(cv<wr[0]||cv>wr[1]):!mine(t)){skipped++;continue}}pts.push([t,cv])}
         added[m]=(added[m]||0)+addSamples(m,pts)}}
-    if(first){try{const sids=ORDER.filter(m=>map[m]&&m!=='hr');const st=await wsStats(sids.map(m=>map[m]),now-730*DAY);
+    if(skipped)HD.log.unshift({t:now,msg:skipped+' weegwaarden van andere gezinsleden overgeslagen (buiten '+wr[0]+'–'+wr[1]+' kg).'});
+    if(first){try{const sids=ORDER.filter(m=>map[m]&&m!=='hr'&&METRICS[m].grp!=='body');const st=await wsStats(sids.map(m=>map[m]),now-730*DAY);
         for(const m of sids){const rows=st[map[m]]||[];const d=HD.daily[m]||(HD.daily[m]={});const M=METRICS[m];
           rows.forEach(r=>{const t=typeof r.start==='number'?r.start:Date.parse(r.start);const raw=M.agg==='max'?(r.max!=null?r.max:r.mean):(r.mean!=null?r.mean:r.max);if(raw==null||!t)return;const v=conv(m,raw,CFG.units[m]);if(plausible(m,v))d[dkey(t)]=v})}
         HD.log.unshift({t:now,msg:'Langetermijnstatistiek opgehaald (daggemiddelden).'})}
       catch(e){HD.log.unshift({t:now,msg:'Geen langetermijnstatistiek beschikbaar ('+e.message+'); alleen recente historie (HA bewaart standaard 10 dagen).'})}}
-    prune();linkAll();HD.lastOk=now;HD.lastErr='';lastErr='';
+    deriveFat();prune();linkAll();HD.lastOk=now;HD.lastErr='';lastErr='';
     const tot=Object.values(added).reduce((a,b)=>a+b,0);HD.log.unshift({t:now,msg:tot?tot+' nieuwe metingen: '+Object.keys(added).filter(k=>added[k]).map(k=>METRICS[k].l.toLowerCase()+' '+added[k]).join(', '):'Geen nieuwe metingen.'});
     HD.log=HD.log.slice(0,20);await saveHD();busy=false;refreshStatus();return{ok:true,added:tot}}
   catch(e){HD.lastErr=e.message;lastErr=e.message;HD.log.unshift({t:now,msg:'Fout: '+e.message});HD.log=HD.log.slice(0,20);await saveHD();busy=false;refreshStatus();return{err:e.message}}}
@@ -189,17 +203,17 @@ function series(m,per){const from=per?Date.now()-per*DAY:0;let pts=inRange(m,fro
   if(pts.length>120){const by={};pts.forEach(p=>{const d=new Date(p.t);const wk=new Date(d.getFullYear(),d.getMonth(),d.getDate()-((d.getDay()+6)%7)).getTime();(by[wk]=by[wk]||[]).push(p.v)});pts=Object.keys(by).sort().map(k=>({t:+k,v:avg(by[k])}))}
   return pts}
 function metricCard(m,per){const M=METRICS[m];const lt=latest(m);if(!lt)return'';const pts=series(m,per);const from=per?Date.now()-per*DAY:0;const a=avg(inRange(m,from).map(x=>x.v));const tr=trend(m,from);
-  const unit=m==='sleep'?' uur':M.u?' '+M.u:'';const fmt=v=>nf(v,M.dec);
+  const unit=m==='sleep'?' uur':M.u?' '+M.u:'';const derived=m==='fat'&&HD.fatDerived&&!CFG.map.fat;const fmt=v=>nf(v,M.dec);
   const statOnly=pts.length&&pts.every(p=>p.src==='HA-statistiek');
-  return`<div class="card"><div class="row sp"><h2 style="margin:0">${M.l}</h2><span class="chip">${E(M.src)}</span></div>
+  return`<div class="card"><div class="row sp"><h2 style="margin:0">${M.l}</h2><span class="chip">${derived?'berekend':E(M.src)}</span></div>
   <div class="stats" style="margin-top:10px"><div class="stat"><b>${fmt(lt.v)}</b><span>laatste meting${lt.stat?' (dag)':''}</span></div><div class="stat"><b>${a!=null?fmt(a):'–'}</b><span>gemiddelde</span></div><div class="stat"><b style="font-size:15px">${tr?tr.label:'–'}</b><span>trend${tr?' '+(tr.slope>=0?'+':'')+nf(tr.slope,M.dec+1)+'/wk':''}</span></div></div>
   ${typeof chart==='function'?chart(pts.map(p=>({x:new Date(p.t).toISOString(),y:p.v})),{h:120,fmt}):''}
-  <div class="tiny mut" style="margin-top:4px">Laatste meting: ${fmtT(lt.t)}${unit?' · eenheid'+unit:''}. ${M.agg==='max'?'Dagwaarde = hoogste stand van de dag.':M.agg==='last'?'Dagwaarde = laatste waarde van de dag.':'Dagwaarde = daggemiddelde.'}${statOnly?' Oudere punten komen uit de HA-langetermijnstatistiek.':''}${M.est?' Schatting van de weegschaal; kijk naar de trend.':''}${!tr?' Trend: minimaal 4 dagen over ruim een week nodig.':''}</div></div>`}
+  <div class="tiny mut" style="margin-top:4px">Laatste meting: ${fmtT(lt.t)}${unit?' · eenheid'+unit:''}. ${M.agg==='max'?'Dagwaarde = hoogste stand van de dag.':M.agg==='last'?'Dagwaarde = laatste waarde van de dag.':'Dagwaarde = daggemiddelde.'}${statOnly?' Oudere punten komen uit de HA-langetermijnstatistiek.':''}${derived?' Berekend uit vetmassa ÷ gewicht van dezelfde weging.':''}${M.est?' Schatting van de weegschaal; kijk naar de trend.':''}${!tr?' Trend: minimaal 4 dagen over ruim een week nodig.':''}</div></div>`}
 function view(){const per=(S.ui.hp||'30');const P=PER.find(x=>x[0]===per)||PER[1];
   let h=hdr('Gezondheid','Lichaam, hartslag, slaap en herstel');
   if(!CFG||!CFG.url||!CFG.consent){return h+`<div class="card"><h2>Nog niet gekoppeld</h2><div class="small mut" style="margin-bottom:10px">Hier komen je FITAGE-metingen (gewicht, vetpercentage, spiermassa) en je Apple Watch-gegevens (rusthartslag, HRV, slaap, stappen). Ze komen uit je eigen Home Assistant en blijven op deze iPhone. Er worden geen voorbeeld- of nepwaarden getoond.</div><button class="btn pri full" data-a="h_setup">Koppelen met Home Assistant</button></div>
    <div class="card"><h2>Hoe het werkt</h2><div class="small mut">1. FITAGE-weegschaal → Home Assistant (heb je al).<br>2. Apple Watch → Apple Gezondheid → HA Companion-app (Apple Health-sensoren aanzetten).<br>3. Deze app haalt de waarden via een beveiligde https-verbinding op uit Home Assistant, bij openen en met "Nu synchroniseren".<br><br>Een website kan Apple Gezondheid niet rechtstreeks of live uitlezen; daarom loopt het via Home Assistant.</div></div>`}
-  const r=recovery();const ms=ORDER.filter(m=>CFG.map[m]&&m!=='hr');
+  const r=recovery();const ms=ORDER.filter(m=>(CFG.map[m]||(m==='fat'&&HD.fatDerived))&&m!=='hr');
   h+=`<div class="card"><div class="row sp">${statusLine()}<button class="btn sm" data-a="h_sync">Nu synchroniseren</button></div>${HD.lastErr?`<div class="banner warn" style="margin-top:8px">${E(HD.lastErr)} Je opgeslagen gegevens blijven bewaard.</div>`:''}</div>`;
   h+=`<div class="card"><div class="row sp"><h2 style="margin:0">Herstel vandaag</h2><span class="chip acc">suggestie</span></div>${r.flags.concat(r.ok).map(x=>`<div class="small" style="margin-top:6px">${r.flags.includes(x)?'⚠️':'✓'} ${E(x.t)}</div>`).join('')}<div class="small" style="margin-top:8px"><b>${E(r.sum)}</b></div>${r.sets48?`<div class="tiny mut" style="margin-top:4px">Trainingsbelasting laatste 48 uur: ${r.sets48} sets.</div>`:''}<div class="tiny mut" style="margin-top:6px">Vaste regels: rusthartslag ≥5 bpm boven je mediaan, HRV ≥15% onder je mediaan, of minder dan 6 uur slaap. Geen diagnose.</div></div>`;
   h+=`<div class="seg" style="margin:4px 0 10px">${PER.map(x=>`<button class="${x[0]===P[0]?'on':''}" data-a="h_per" data-k="${x[0]}">${x[1]}</button>`).join('')}</div>`;
@@ -215,7 +229,9 @@ function todayCard(){if(!configured())return'';const r=recovery();const w=latest
   ${w?`<div class="small" style="margin-top:8px">${KCH.gemeten} ${nf(w.v,1)} kg · ${ago(w.t)}${t?` · trend ${t.label}`:''}</div>`:''}
   ${r.level?`<div class="small" style="margin-top:6px">${KCH.suggestie} ${E(r.sum)}</div>`:''}
   <button class="btn sm" style="margin-top:8px" data-a="tab" data-k="gezondheid">Bekijk details</button></div>`}
-function settingsCard(){return`<div class="card"><div class="row sp"><h2 style="margin:0">Gezondheid (Home Assistant)</h2>${statusLine()}</div><div class="tiny mut" style="margin:6px 0 8px">FITAGE-weegschaal en Apple Watch via je eigen Home Assistant. Token staat alleen op dit apparaat en gaat niet mee in back-ups.</div><button class="btn full" data-a="h_setup">${CFG&&CFG.url?'Koppeling beheren':'Koppelen'}</button></div>`}
+function settingsCard(){return`<div class="card"><div class="row sp"><h2 style="margin:0">Back-up in Home Assistant</h2><span class="small ${CFG&&CFG.haBackupOk&&!CFG.haBackupErr?'':'mut'}">${CFG&&CFG.haBackup?(CFG.haBackupOk?'✓ '+ago(CFG.haBackupOk):'nog niet gelukt'):'uit'}</span></div>
+  <div class="tiny mut" style="margin:6px 0 8px">${CFG&&CFG.haBackup?'Na elke training gaat er automatisch een back-up naar je eigen Home Assistant.'+(CFG.haBackupErr?' Laatste poging mislukt: '+E(CFG.haBackupErr):''):'Zet aan via "Koppeling beheren". Dan ben je niet meer afhankelijk van iCloud.'}</div>${CFG&&CFG.haBackup?'<button class="btn sm" data-a="h_bknow">Nu back-up maken</button>':''}</div>
+  <div class="card"><div class="row sp"><h2 style="margin:0">Gezondheid (Home Assistant)</h2>${statusLine()}</div><div class="tiny mut" style="margin:6px 0 8px">FITAGE-weegschaal en Apple Watch via je eigen Home Assistant. Token staat alleen op dit apparaat en gaat niet mee in back-ups.</div><button class="btn full" data-a="h_setup">${CFG&&CFG.url?'Koppeling beheren':'Koppelen'}</button></div>`}
 
 let DRAFT=null;
 function setupSheet(){DRAFT=DRAFT||{...emptyCfg(),...CFG,map:{...CFG.map},units:{...CFG.units}};const c=DRAFT;const origin=location.origin;
@@ -227,6 +243,8 @@ function setupSheet(){DRAFT=DRAFT||{...emptyCfg(),...CFG,map:{...CFG.map},units:
   <label class="lb">URL van Home Assistant</label><input class="f" id="h_url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://xxxx.ui.nabu.casa" value="${E(c.url)}">
   <label class="lb">Toegangstoken</label><input class="f" id="h_tok" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${c.token?'•••••• (opgeslagen, laat leeg om te behouden)':'plak je token'}">
   <label class="row" style="gap:8px;margin-top:12px;align-items:flex-start"><input type="checkbox" id="h_cons" ${c.consent?'checked':''} style="margin-top:3px"><span class="small">Ik geef toestemming om mijn gezondheidsgegevens (gewicht en lichaamssamenstelling, hartslag, rusthartslag, HRV, slaap, stappen, actieve energie) uit mijn Home Assistant op te halen. Ze worden alleen op dit apparaat opgeslagen.</span></label>
+  <label class="lb">Mijn weegbereik (kg)</label><div class="row" style="gap:8px"><input class="f" id="h_wr0" type="number" inputmode="decimal" value="${range()[0]}" style="flex:1"><span class="mut">tot</span><input class="f" id="h_wr1" type="number" inputmode="decimal" value="${range()[1]}" style="flex:1"></div>
+  <div class="tiny mut" style="margin-top:4px">De weegschaal wordt door het hele gezin gebruikt. Alleen wegingen binnen dit bereik (en de vet-/spierwaarden van diezelfde weging) worden aan dit profiel gekoppeld; andere wegingen worden niet bewaard.</div>
   <button class="btn pri full" style="margin-top:12px" data-a="h_test">Verbinding testen en sensoren zoeken</button>
   <div id="h_msg" class="small" style="margin-top:8px"></div>
   ${cand?`<h2 style="margin-top:14px">Gevonden sensoren</h2><div class="tiny mut" style="margin-bottom:6px">Controleer de keuzes. Kies bij gewicht de echte gemeten waarde van de weegschaal, niet een berekende of BMI-schatting.</div>
@@ -234,7 +252,9 @@ function setupSheet(){DRAFT=DRAFT||{...emptyCfg(),...CFG,map:{...CFG.map},units:
      return`<label class="lb">${METRICS[m].l}</label><select class="f h_map" data-m="${m}"><option value="">— niet koppelen —</option>${opts.concat(extra).map(o=>`<option value="${E(o.id)}" ${o.id===sel?'selected':''}>${E(o.name)} · ${E(o.state)} ${E(o.unit)} (${E(o.id)})</option>`).join('')}</select>`}).join('')}
    <label class="lb">Andere sensor handmatig (entity_id → meting)</label><div class="row" style="gap:6px"><input class="f" id="h_man" placeholder="sensor.fitage_weight" style="flex:1.4" autocapitalize="off"><select class="f" id="h_manm" style="flex:1">${ORDER.map(m=>`<option value="${m}">${METRICS[m].l}</option>`).join('')}</select></div><button class="btn sm" style="margin-top:6px" data-a="h_manadd">Toevoegen</button>
    <button class="btn pri full" style="margin-top:14px" data-a="h_save">Opslaan en synchroniseren</button>`:''}
-  ${c.url&&c.token?`<h2 style="margin-top:16px">Herinneringen op je iPhone</h2><div class="small mut">Een website kan zelf geen meldingen sturen als hij dicht is. Via Home Assistant wel: de app zet de sensor <code>sensor.taurus_coach</code> in HA (laatste training, weekdoel, tekst van Sophie), en een automatisering stuurt om 18:30 een melding als je die dag nog moet trainen.</div>
+  ${c.url&&c.token?`<h2 style="margin-top:16px">Back-up in Home Assistant</h2><label class="row" style="gap:8px;align-items:flex-start"><input type="checkbox" id="h_bk" ${c.haBackup?'checked':''} style="margin-top:3px"><span class="small">Na elke training (en minstens dagelijks) een volledige back-up van mijn trainingen, schema's, voeding en buikspieren in mijn eigen Home Assistant bewaren. Terugzetten kan via het welkomstscherm met je URL en token.</span></label>
+   <div class="tiny mut" style="margin-top:4px">${CFG.haBackupOk?'Laatste back-up: '+fmtT(CFG.haBackupOk)+(CFG.haBackupKB?' ('+CFG.haBackupKB+' kB)':''):'Nog geen back-up in Home Assistant.'}${CFG.haBackupErr?' · fout: '+E(CFG.haBackupErr):''}</div>
+   <h2 style="margin-top:16px">Herinneringen op je iPhone</h2><div class="small mut">Een website kan zelf geen meldingen sturen als hij dicht is. Via Home Assistant wel: de app zet de sensor <code>sensor.taurus_coach</code> in HA (laatste training, weekdoel, tekst van Sophie), en een automatisering stuurt om 18:30 een melding als je die dag nog moet trainen.</div>
    <label class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="h_rem" ${c.remind?'checked':''} style="margin-top:3px"><span class="small">Ja, zet mijn trainingsstatus in Home Assistant (alleen datum, aantal trainingen en de herinneringstekst; geen gezondheidswaarden).</span></label>
    <div class="tiny mut" style="margin-top:6px">${CFG.remindOk?'Laatst bijgewerkt in HA: '+fmtT(CFG.remindOk):''}${CFG.remindErr?' · fout: '+E(CFG.remindErr):''}</div>
    <label class="lb">Automatisering (plakken in HA → Instellingen → Automatiseringen → Nieuw → YAML). Vervang JOUW_IPHONE door de naam uit Ontwikkelaarshulpmiddelen → Acties → zoek "notify.mobile_app".</label><textarea class="f" readonly style="min-height:150px;font-size:11px">${E(YAML())}</textarea>
@@ -243,7 +263,7 @@ function setupSheet(){DRAFT=DRAFT||{...emptyCfg(),...CFG,map:{...CFG.map},units:
   ${CFG.url?`<div class="grid2" style="margin-top:16px"><button class="btn" data-a="h_unlink">Koppeling verwijderen</button><button class="btn" data-a="h_wipe" style="color:var(--bad)">Gezondheidsdata wissen</button></div>`:''}
   <button class="btn full" style="margin-top:10px" data-a="h_close">Sluiten</button>`)}
 function readForm(){const c=DRAFT;const u=document.getElementById('h_url');const tk=document.getElementById('h_tok');const cs=document.getElementById('h_cons');
-  const rm=document.getElementById('h_rem');if(rm)c.remind=rm.checked;if(u)c.url=u.value.trim();if(tk&&tk.value.trim())c.token=tk.value.trim();if(cs)c.consent=cs.checked?(c.consent||new Date().toISOString()):null;
+  const rm=document.getElementById('h_rem');if(rm)c.remind=rm.checked;const bk=document.getElementById('h_bk');if(bk)c.haBackup=bk.checked;const w0=document.getElementById('h_wr0'),w1=document.getElementById('h_wr1');if(w0&&w1&&+w0.value<+w1.value)c.wr=[+w0.value,+w1.value];if(u)c.url=u.value.trim();if(tk&&tk.value.trim())c.token=tk.value.trim();if(cs)c.consent=cs.checked?(c.consent||new Date().toISOString()):null;
   document.querySelectorAll('.h_map').forEach(s=>{c.map[s.dataset.m]=s.value||null;const o=(c.cands&&c.cands[s.dataset.m]||[]).find(x=>x.id===s.value);if(o)c.units[s.dataset.m]=o.unit})}
 const msg=(t,bad)=>{const el=document.getElementById('h_msg');if(el){el.innerHTML=t;el.style.color=bad?'var(--bad)':''}};
 async function doTest(){readForm();const c=DRAFT;try{c.url=normUrl(c.url)}catch(e){return msg(E(e.message),1)}
@@ -254,7 +274,7 @@ async function doTest(){readForm();const c=DRAFT;try{c.url=normUrl(c.url)}catch(
   catch(e){msg(E(e.message),1)}}
 async function doSave(){readForm();const c=DRAFT;try{c.url=normUrl(c.url)}catch(e){return msg(E(e.message),1)}if(!c.consent)return msg('Toestemming is nodig.',1);
   const changed=JSON.stringify(c.map)!==JSON.stringify(CFG.map);CFG={...c};delete CFG.cands;await saveCfg();DRAFT=null;closeSheet();if(typeof render==='function')render();
-  pushT=0;pushState();toast('Synchroniseren…',3000);const r=await sync({full:changed||!HD.lastOk});toast(r.err?'Synchronisatie mislukt: '+r.err:`Gesynchroniseerd: ${r.added||0} nieuwe metingen.`,4500);if(S.ui.tab==='gezondheid'||S.ui.tab==='vandaag')render()}
+  pushT=0;pushState();if(CFG.haBackup)haBackup(true);toast('Synchroniseren…',3000);const r=await sync({full:changed||!HD.lastOk});toast(r.err?'Synchronisatie mislukt: '+r.err:`Gesynchroniseerd: ${r.added||0} nieuwe metingen.`,4500);if(S.ui.tab==='gezondheid'||S.ui.tab==='vandaag')render()}
 document.addEventListener('click',async ev=>{const t=ev.target.closest('[data-a^="h_"]');if(!t)return;const a=t.dataset.a;
   if(a==='h_setup'){DRAFT=null;setupSheet()}
   else if(a==='h_close'){DRAFT=null;closeSheet()}
@@ -291,11 +311,53 @@ mode: single`;
 let pushT=0;
 async function pushState(){if(!CFG||!CFG.url||!CFG.token||!CFG.remind||typeof coachState!=='function')return;if(Date.now()-pushT<60e3)return;pushT=Date.now();
   try{const c=coachState();await ha('/api/states/sensor.taurus_coach',CFG,{state:c.state,attributes:{friendly_name:'Taurus Coach',icon:'mdi:dumbbell',last_workout:c.last_workout,week_done:c.week_done,week_goal:c.week_goal,next_plan:c.next_plan,next_minutes:c.next_minutes,due:c.due,message:c.message,updated:new Date().toISOString()}});CFG.remindOk=Date.now();saveCfg()}catch(e){CFG.remindErr=e.message;saveCfg()}}
+/* ---------- back-up in Home Assistant (blijft thuis, versleuteld verkeer, alleen met jouw token leesbaar) ----------
+   Opslag: HA 'frontend user data' van de HA-gebruiker van het token (bewaard in HA's .storage, overleeft herstarts). */
+function wsRun(c,msg){return new Promise((res,rej)=>{let ws,done=false;const fin=(f,v)=>{if(done)return;done=true;clearTimeout(to);try{ws.close()}catch(e){}f(v)};
+  const to=setTimeout(()=>fin(rej,new Error('Home Assistant reageert niet (time-out).')),25000);
+  try{ws=new WebSocket(c.url.replace(/^https:/,'wss:')+'/api/websocket')}catch(e){return fin(rej,e)}
+  ws.onerror=()=>fin(rej,new Error('Geen verbinding met Home Assistant.'));
+  ws.onmessage=ev=>{let m;try{m=JSON.parse(ev.data)}catch(e){return}
+    if(m.type==='auth_required')ws.send(JSON.stringify({type:'auth',access_token:c.token}));
+    else if(m.type==='auth_invalid')fin(rej,new Error('Token geweigerd.'));
+    else if(m.type==='auth_ok')ws.send(JSON.stringify({id:1,...msg}));
+    else if(m.id===1)m.success?fin(res,m.result):fin(rej,new Error((m.error&&m.error.message)||'Home Assistant gaf een fout.'))}})}
+const slug=x=>(x||'profiel').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')||'profiel';
+function backupPayload(){return{...S,photos:[],active:null,type:'taurus-backup',exported:(typeof localISO==='function'?localISO():new Date().toISOString()),via:'homeassistant',
+  family:window.VOED?VOED.exportData():null,abs:window.BUIK?BUIK.exportData():null}}
+let bkBusy=false;
+async function haBackup(force){if(!CFG||!CFG.url||!CFG.token||!CFG.haBackup||bkBusy||typeof S==='undefined'||!S.profile)return{skip:true};
+  if(!force&&CFG.haBackupOk&&Date.now()-CFG.haBackupOk<20*3600e3)return{skip:true};bkBusy=true;
+  try{const key='taurus_coach_'+slug(S.profile.name);const n=(S.workouts||[]).length;if(!n)throw new Error('Nog geen trainingen; er wordt niets overschreven.');
+    const prev=await wsRun(CFG,{type:'frontend/get_user_data',key});if(prev&&prev.value){try{const pn=(JSON.parse(prev.value).workouts||[]).length;if(pn>n)throw new Error(`Home Assistant heeft een vollere back-up (${pn} trainingen, hier ${n}). Herstel die eerst via het welkomstscherm of Instellingen.`)}catch(e){if(/vollere/.test(e.message))throw e}}
+    const txt=JSON.stringify(backupPayload());await wsRun(CFG,{type:'frontend/set_user_data',key,value:txt});
+    CFG.haBackupOk=Date.now();CFG.haBackupErr='';CFG.haBackupKB=Math.round(txt.length/1024);await saveCfg();bkBusy=false;return{ok:true,kb:CFG.haBackupKB}}
+  catch(e){CFG.haBackupErr=e.message;await saveCfg();bkBusy=false;return{err:e.message}}}
+async function listHABackups(url,token){const c={url:normUrl(url),token:(token||'').trim()};if(!c.token)throw new Error('Plak je toegangstoken.');
+  const r=await wsRun(c,{type:'frontend/get_user_data'});const all=(r&&r.value)||{};const out=[];
+  for(const k in all){if(!k.startsWith('taurus_coach_'))continue;try{const d=JSON.parse(all[k]);out.push({key:k,name:(d.profile&&d.profile.name)||k.slice(13),at:d.exported,n:(d.workouts||[]).length,data:all[k]})}catch(e){}}
+  return{c,list:out}}
+let RB=null;
+function restoreSheet(){sheet(`<h2>Herstellen uit Home Assistant</h2><div class="small mut">Werkt als de automatische back-up naar Home Assistant aan stond. Je token staat in Home Assistant onder je profiel → Beveiliging (maak zo nodig een nieuw).</div>
+  <label class="lb">URL van Home Assistant</label><input class="f" id="r_url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="https://xxxx.ui.nabu.casa" value="${E((CFG&&CFG.url)||'')}">
+  <label class="lb">Toegangstoken</label><input class="f" id="r_tok" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button class="btn pri full" style="margin-top:12px" data-a="h_rlist">Back-ups zoeken</button><div id="r_out" class="small" style="margin-top:10px"></div>
+  <button class="btn full" style="margin-top:10px" data-a="h_close">Sluiten</button>`)}
+document.addEventListener('click',async ev=>{const t=ev.target.closest('[data-a="h_restore"],[data-a="h_rlist"],[data-a="h_rpick"],[data-a="h_bknow"]');if(!t)return;const a=t.dataset.a;
+  if(a==='h_restore')restoreSheet();
+  else if(a==='h_rlist'){const o=document.getElementById('r_out');o.textContent='Zoeken…';o.style.color='';
+    try{RB=await listHABackups(document.getElementById('r_url').value,document.getElementById('r_tok').value);
+      o.innerHTML=RB.list.length?RB.list.map((b,i)=>`<button class="li" style="width:100%" data-a="h_rpick" data-k="${i}"><div class="grow" style="text-align:left"><b>${E(b.name)}</b><div class="small mut">${b.n} trainingen · ${E((b.at||'').replace('T',' ').slice(0,16))}</div></div><span>›</span></button>`).join(''):'Geen Taurus-back-ups gevonden voor deze Home Assistant-gebruiker.'}
+    catch(e){o.textContent=e.message;o.style.color='var(--bad)'}}
+  else if(a==='h_rpick'){const b=RB&&RB.list[+t.dataset.k];if(!b)return;closeSheet();
+    fileKind=(typeof META!=='undefined'&&META.current)?'json':'welkom';await onFile({name:'Home Assistant ('+b.name+')',text:async()=>b.data});
+    if(META.current){CFG={...CFG,url:RB.c.url,token:RB.c.token,haBackup:true};await saveCfg();toast('Hersteld uit Home Assistant. Automatische back-up staat aan.',5000)}if(typeof render==='function')render()}
+  else if(a==='h_bknow'){const r=await haBackup(true);toast(r.err?'Back-up mislukt: '+r.err:r.ok?`Back-up opgeslagen in Home Assistant (${r.kb} kB).`:'Zet eerst de back-up naar Home Assistant aan.',5000);if(typeof render==='function')render()}});
 /* ---------- back-up (zonder token) ---------- */
 function exportData(){return HD?{v:1,series:HD.series,daily:HD.daily}:null}
 async function importData(d){if(!d||!d.series)return 0;let n=0;for(const m in d.series){if(!METRICS[m]||!Array.isArray(d.series[m]))continue;n+=addSamples(m,d.series[m].filter(p=>Array.isArray(p)&&isFinite(p[0])&&isFinite(p[1])))}
   for(const m in (d.daily||{})){if(!METRICS[m])continue;const t=HD.daily[m]||(HD.daily[m]={});for(const k in d.daily[m])if(t[k]==null&&isFinite(d.daily[m][k]))t[k]=d.daily[m][k]}await saveHD();return n}
 
-window.HEALTH={METRICS,haGet:async p=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Koppel eerst Home Assistant (Gezondheid → Koppelen).');return ha(p)},pushState,load,sync,autoSync,view,todayCard,settingsCard,answer,insights,recovery,hrBlock,linkWorkout,exportData,importData,configured,
+window.HEALTH={range,haBackup,restoreSheet,METRICS,haGet:async p=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Koppel eerst Home Assistant (Gezondheid → Koppelen).');return ha(p)},pushState,load,sync,autoSync,view,todayCard,settingsCard,answer,insights,recovery,hrBlock,linkWorkout,exportData,importData,configured,
   _t:{normUrl,discover,score,addSamples,days,trend,conv,plausible,wWindow,hrFor,linkAll,setState:(c,h)=>{CFG={...emptyCfg(),...c};HD={...emptyHD(),...h}},get HD(){return HD},get CFG(){return CFG}}};
 })();
