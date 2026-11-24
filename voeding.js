@@ -119,7 +119,7 @@ function genBase(){const g=pick('diner','g',7,0),kb=pick('ontbijt','k',7,0),kl=p
    {id:'k-post',t:'post',time:'23:30',meal:kpo[d],who:['k'],train:true}].filter(x=>x.meal))}
 
 /* ---------- rooster ---------- */
-function shiftsAll(){return F.shifts.filter(s=>!s.cancelled).map(s=>({...s,...(F.shiftExtra[s.id]||{})}))}
+function shiftsAll(){return F.shifts.filter(s=>!s.cancelled&&(s.src!=='ha'||isWork(s.title))).map(s=>({...s,...(F.shiftExtra[s.id]||{})}))}
 const TL={avond:'avonddienst',nacht:'nachtdienst',dag:'dagdienst'};
 function breakFor(s){const st=absMin(s.start),en=absMin(s.end);let b=s.brk||(s.type==='nacht'?F.pp.breakNight:F.pp.breakEvening);let bm=absMin(s.start.slice(0,10)+'T'+b);if(bm<st)bm+=1440;if(bm<st||bm>en)bm=Math.round((st+en)/2);return bm}
 
@@ -165,7 +165,83 @@ function dayPlan(ds){const dow=dowOf(ds),pp=F.pp,dayAbs=absMin(ds+'T00:00');cons
     const v={...(i>=0?it[i]:{}),...o,reason:[o.pinned?'Vastgezet':'Aangepast voor deze dag'],src:o.pinned?'vast':'dag'};if(i>=0)it[i]=v;else it.push(v)}
   it.sort((a,b)=>(a.time?tm(a.time)+(a.at&&a.at.slice(0,10)>ds?1440:0):2000)-(b.time?tm(b.time)+(b.at&&b.at.slice(0,10)>ds?1440:0):2000));
   return{date:ds,dow,trainDay,items:it,shifts:notes,ending:ending.map(s=>s.id),kNotes}}
-function kcalDay(p){let k=0,unk=0;p.items.filter(x=>x.who.includes('k')).forEach(x=>{const m=M[x.meal];if(x.ingK||!m||!m.kk)unk++;else k+=m.kk});return{k,unk}}
+/* ---------- recepten: kruiden, bereiding en ovenstand (Bosch: oven CMG8764C7, stoomoven CSG856RC7 via Home Connect) ---------- */
+const PROG={hot_air:'Hetelucht',top_bottom_heating:'Boven- en onderwarmte',hot_air_grilling:'Hetelucht grillen',pizza_setting:'Pizzastand',steam:'Stomen'};
+const OV=(dev,prog,temp,min,pre)=>({dev,prog,temp,min,pre:pre!==false});
+const REC={
+ g_kipspies:{tijd:40,kr:'1 tl paprikapoeder, ½ tl oregano, ½ tl tijm, peper, zout, rasp van ½ citroen',oven:OV('oven','hot_air',200,25),st:['Oven voorverwarmen op 200 °C hetelucht (knop hieronder).','Aardappels (Kristiaan) in partjes, 1 el olie en een snuf zout erover; alvast 10 min in de oven.','Kip in blokjes, courgette en paprika in grove stukken; rijg om en om aan spiesjes.','Meng olie met de kruiden en citroenrasp en kwast de spiesjes in.','Spiesjes naast de aardappels leggen, nog 20–25 min tot de kip gaar is (kern 74 °C), halverwege keren.']},
+ g_ovenschotel:{tijd:45,kr:'1 tl Italiaanse kruiden (zonder knoflook), nootmuskaat, peper, zout',oven:OV('oven','hot_air',190,25),st:['Oven voorverwarmen op 190 °C hetelucht.','Aardappels (Kristiaan) schillen, in plakjes 10 min koken.','Broccoli in roosjes 3 min koken of 6 min stomen.','Kip in blokjes bakken tot bruin, op smaak met kruiden.','Alles in een ovenschaal, lactosevrije room erover, Patricia’s kant met geraspte kaas.','25 min in de oven tot goudbruin.']},
+ g_zalm:{tijd:30,kr:'Dille, rasp en sap van ½ citroen, peper, zout, eventueel 1 tl mosterd (glutenvrij)',oven:OV('oven','hot_air',200,15),st:['Oven voorverwarmen op 200 °C hetelucht.','Aardappels (Kristiaan) koken, ca. 20 min.','Zalm op bakpapier, met citroenrasp, dille, peper en zout; schijfjes citroen erop.','15 min in de oven (zalm is goed als hij net uit elkaar valt).','Broccoli en wortel ondertussen koken of in de stoomoven: 100 °C stomen, 8–10 min.']},
+ g_balletjes:{tijd:35,kr:'1 tl oregano, ½ tl paprikapoeder, verse basilicum, peper, zout (geen ui of ei: binden met 1 el passata)',oven:OV('oven','hot_air',200,15),st:['Oven voorverwarmen op 200 °C hetelucht.','Gehakt kneden met kruiden, peper, zout en 1 el passata; draai er kleine balletjes van.','Balletjes op bakpapier, 15 min in de oven (geen spetteren, minder vet).','Courgette in blokjes 5 min bakken, passata erbij, 5 min laten pruttelen.','Balletjes in de saus. Pasta (Kristiaan) volgens de verpakking; Patricia met extra courgette en geraspte kaas.']},
+ g_kipaardappel:{tijd:45,kr:'Rozemarijn, tijm, paprikapoeder, peper, zout',oven:OV('oven','hot_air',200,35),st:['Oven voorverwarmen op 200 °C hetelucht.','Aardappels (Kristiaan) in partjes met olie, rozemarijn en zout; 35 min in de oven, halverwege omscheppen.','Kipfilet met paprikapoeder, tijm, peper en zout; in de pan 6–8 min per kant, of de laatste 20 min mee in de oven.','Sperziebonen en wortel 8 min koken of 10 min stomen (stoomoven 100 °C).']},
+ g_kabeljauw:{tijd:30,kr:'Peterselie, citroen, ½ tl paprikapoeder, peper, zout',oven:OV('oven','hot_air',200,14),st:['Oven voorverwarmen op 200 °C hetelucht.','Aardappels (Kristiaan) koken, ca. 20 min.','Kabeljauw in een ovenschaal, tomaat in partjes eromheen, scheutje olie, kruiden en citroen.','12–15 min in de oven tot de vis wit en schilferig is.','Sperziebonen 8 min koken of stomen; peterselie erover.']},
+ g_kipgroente:{tijd:25,kr:'1 tl paprikapoeder, ½ tl oregano, peper, zout',st:['Rijst (Kristiaan) koken volgens de verpakking.','Kip in reepjes in olie 5–6 min bakken tot gaar; kruiden erbij.','Courgette, paprika en champignons erbij, 5 min roerbakken.','Proeven, op smaak brengen.']},
+ g_gehakt:{tijd:25,kr:'1 tl oregano, ½ tl tijm, basilicum, peper, zout',st:['Pasta (Kristiaan) koken.','Gehakt rul bakken, vet afgieten.','Courgette en champignons erbij, 5 min bakken.','Passata en kruiden erbij, 10 min zacht laten pruttelen.','Patricia zonder pasta, met geraspte kaas.']},
+ g_kipgehakt:{tijd:25,kr:'Paprikapoeder, oregano, peper, zout',st:['Rijst (Kristiaan) koken.','Kipgehakt rul bakken.','Courgette en champignons erbij, 5 min.','Passata en kruiden erbij, 10 min laten pruttelen.']},
+ g_kiproom:{tijd:30,kr:'Tijm, peterselie, nootmuskaat, peper, zout',st:['Aardappels (Kristiaan) koken.','Kip in blokjes bakken tot gaar.','Groente erbij, 5 min bakken.','Lactosevrije room erbij, kort laten indikken; kruiden erdoor.']},
+ g_rundwok:{tijd:20,kr:'Gember (vers of poeder), glutenvrije tamari i.p.v. sojasaus, peper',st:['Rijst (Kristiaan) koken.','Broccoli en sperziebonen 3 min voorkoken.','Rundreepjes op hoog vuur 2 min wokken, uit de pan.','Groente 3 min wokken, vlees terug, gember en tamari erbij.']},
+ g_kalkoenwok:{tijd:20,kr:'Paprikapoeder, gember, glutenvrije tamari, peper',st:['Rijst (Kristiaan) koken.','Kalkoen in reepjes 4–5 min wokken.','Paprika, sperziebonen en wortel erbij, 4 min.','Op smaak met gember en tamari.']},
+ g_bowl:{tijd:20,kr:'Paprikapoeder, komijn, limoen of citroen, peper, zout',st:['Rijst (Kristiaan) koken en laten afkoelen.','Kip met kruiden bakken, in plakjes.','Komkommer, paprika en tomaat in blokjes, avocado in plakjes.','Bowl vullen; Patricia met sla i.p.v. rijst. Scheutje citroen erover.']},
+ g_curry:{tijd:25,kr:'1 tl milde kerrie, ½ tl kurkuma, ½ tl komijn, gember (controleer kerrie op gluten)',st:['Rijst (Kristiaan) koken.','Kip in blokjes bakken, kruiden 1 min meebakken.','Broccoli en paprika erbij, 5 min.','Lactosevrije room erbij, 5 min zacht laten pruttelen.']},
+ g_rundspinazie:{tijd:25,kr:'Tijm, nootmuskaat, peper, zout',st:['Aardappels (Kristiaan) koken.','Rundreepjes op hoog vuur 2 min bakken, uit de pan.','Champignons 4 min bakken, (courgette voor Patricia erbij).','Spinazie erbij laten slinken, vlees terug, op smaak.']},
+ g_soep:{tijd:15,kr:'Peterselie, peper',st:['Soep verwarmen.','Kip in reepjes bakken of meekoken tot gaar, in de soep.','Kristiaan met volkoren brood, Patricia met zadencrackers.']},
+ k_omelet:{tijd:10,kr:'Peper, zout, bieslook',st:['Eieren loskloppen met peper en zout.','Spinazie in de pan laten slinken, eieren erover.','Op laag vuur gaar laten worden, kalkoen erop.','Met volkoren brood en een stuk fruit.']},
+ k_oats:{tijd:5,kr:'Kaneel',st:['’s Avonds: havermout, melk en whey mengen in een bak.','Afgedekt in de koelkast.','’s Ochtends banaan en pindakaas erop, kaneel erover.']},
+ k_haver:{tijd:8,kr:'Kaneel',st:['Havermout met melk 3–4 min verwarmen (of 2 min magnetron).','Whey erdoor roeren als het iets is afgekoeld.','Banaan en pindakaas erop.']},
+ k_rijstsalade:{tijd:15,kr:'Peterselie, paprikapoeder, citroensap, peper, zout',st:['Rijst koken en afkoelen (of restje).','Kip bakken en in blokjes.','Paprika en komkommer in blokjes, alles mengen met olie, citroen en kruiden.']},
+ p_salade:{tijd:15,kr:'Oregano, citroensap, peper',st:['Kip met oregano bakken, in reepjes.','Sla en paprika in een bak, kip erop, hummus en kaas erbij.']},
+ p_zalmsalade:{tijd:15,kr:'Dille, citroen, peper',st:['Zalm 12 min in de oven op 200 °C hetelucht, of uit de pan.','Sla, komkommer en tomaat met olie en citroen, zalm erop.']}};
+function ovenNames(){return{oven:'Oven',stoomoven:'Stoomoven'}}
+let HA={ws:m=>HEALTH.haWS(m),get:p=>HEALTH.haGet(p)};
+/* ---------- oven via Home Assistant (Home Connect). Alleen op jouw knopdruk, met bevestiging; de oven moet zelf 'Start op afstand' aan hebben. ---------- */
+async function findOvens(){const r=await HA.ws({type:'config/entity_registry/list_for_display'});const L=(r&&r.entities)||[];const o={};
+  L.forEach(e=>{const m=/^select\.(.+)_(actieve_programma|active_program)$/.exec(e.ei||'');if(m&&e.di){const key=/stoom|steam/i.test(m[1])?'stoomoven':'oven';if(!o[key])o[key]={dev:e.di,pre:m[1]}}});
+  const st=await HA.get('/api/states');const ids=(st||[]).map(x=>x.entity_id);
+  for(const k in o){const p=o[k].pre;const f=re=>ids.find(i=>i.startsWith(re[0]+'.')&&i.includes(p)&&re[1].test(i));o[k].remote=f(['binary_sensor',/start_op_afstand|remote_start/]);o[k].status=f(['sensor',/_status$|operation_state/]);o[k].temp=f(['sensor',/temperatuur|temperature/]);o[k].stop=f(['button',/stop/])}
+  F.ovens={...o,found:Date.now()};save(true);return o}
+async function ovenState(key){if(!F.ovens||!F.ovens[key])await findOvens();const o=F.ovens&&F.ovens[key];if(!o)throw new Error('Geen '+key+' gevonden in Home Assistant (Home Connect).');
+  const g=async id=>id?(await HA.get('/api/states/'+id)).state:null;return{o,remote:await g(o.remote),status:await g(o.status),temp:await g(o.temp)}}
+async function ovenStart(key,ov){const s=await ovenState(key);if(s.remote!=='on')throw new Error('REMOTE');
+  const prog=ov.prog==='steam'?'cooking_oven_program_steam_modes_steam':'cooking_oven_program_heating_mode_'+ov.prog;
+  const base={device_id:s.o.dev,affects_to:'active_program',program:prog,cooking_oven_option_setpoint_temperature:ov.temp};
+  const call=d=>HA.ws({type:'call_service',domain:'home_connect',service:'set_program_and_options',service_data:d});
+  if(key==='oven'&&ov.prog!=='steam'){try{await call({...base,cooking_oven_option_fast_pre_heat:true});return'snel'}catch(e){}}await call(base);return''}
+async function ovenStop(key){const s=await ovenState(key);if(!s.o.stop)throw new Error('Geen stopknop gevonden');await HA.ws({type:'call_service',domain:'button',service:'press',service_data:{entity_id:s.o.stop}})}
+let RS=null;
+function recipeSheet(ds,id){const p=dayPlan(ds);const x=p.items.find(i=>i.id===id);if(!x)return;RS={ds,id};const m=M[x.meal]||{n:x.meal};const R=REC[x.meal];
+  const ings=w=>variant(x.meal,w,w==='k'?x.ingK:x.ingP).map(([i,q,u])=>`<li>${q} ${E(u)} ${E(iN(i).toLowerCase())}</li>`).join('');
+  const ovH=R&&R.oven?`<div class="card" style="margin:10px 0;border-color:rgba(251,146,60,.45)"><div class="row sp"><b>🔥 ${R.oven.dev==='stoomoven'?'Stoomoven':'Oven'}: ${PROG[R.oven.prog]} ${R.oven.temp} °C</b><span class="tiny mut">${R.oven.min} min</span></div>
+   <div class="tiny mut" style="margin-top:4px">Voorverwarmen duurt ±8–12 min. Begin ongeveer ${x.time?hm(Math.max(0,tm(x.time)-(R.tijd||30)-10)):'een kwartier vóór je begint'} als je om ${x.time||'het geplande moment'} wilt eten.</div>
+   <div id="ovst" class="small" style="margin-top:6px"></div>
+   ${window.HEALTH&&HEALTH.hasHA&&HEALTH.hasHA()?`<div class="row" style="gap:8px;margin-top:8px"><button class="btn pri grow" data-a="v_ovask">Nu voorverwarmen</button><button class="btn sm" data-a="v_ovchk">Status</button></div>`:'<div class="tiny mut" style="margin-top:6px">Koppel Home Assistant (Gezondheid) om de oven vanuit hier voor te verwarmen.</div>'}</div>`:'';
+  sheet(`<h2>${E(m.n)}</h2><div class="small mut">${DN[dowOf(ds)]} ${fmtD(ds)}${x.time?' · '+x.time:''}${R&&R.tijd?' · ±'+R.tijd+' min':''} · ${x.who.map(w=>PN[w]).join(' + ')}</div>${ovH}
+   <h3>Ingrediënten</h3>${x.who.map(w=>`<div class="tiny mut" style="margin-top:6px">${PN[w]}${w==='p'?' (glutenvrij)':''} · ≈ ${Math.round(nutItem(x,w).p)} g eiwit, ${Math.round(nutItem(x,w).k)} kcal (schatting)</div><ul class="small" style="margin:4px 0 0 18px;padding:0">${ings(w)}</ul>`).join('')}
+   ${R?`<h3>Kruiden</h3><div class="small">${E(R.kr)}</div><h3>Bereiding</h3><ol class="small" style="margin:4px 0 0 18px;padding:0">${R.st.map(s=>`<li style="margin:4px 0">${E(s)}</li>`).join('')}</ol>`:'<div class="small mut" style="margin-top:10px">Geen bereiding nodig: klaarmaken met de ingrediënten hierboven.</div>'}
+   ${x.who.includes('p')&&R?'<div class="tiny mut" style="margin-top:8px">Voor Patricia zonder ui en knoflook en glutenvrij; controleer kant-en-klare kruidenmixen en sauzen op gluten.</div>':''}
+   <button class="btn full" style="margin-top:14px" data-a="v_edit" data-d="${ds}" data-k="${E(id)}">Maaltijd aanpassen</button>`)}
+async function ovenAsk(){const x=dayPlan(RS.ds).items.find(i=>i.id===RS.id);const R=x&&REC[x.meal];if(!R||!R.oven)return;const el=document.getElementById('ovst');if(!el)return;
+  el.innerHTML=`<div class="banner warn">Zeker weten? De ${R.oven.dev} gaat nu aan op <b>${R.oven.temp} °C ${PROG[R.oven.prog].toLowerCase()}</b>. Zorg dat er niets in of op de oven staat. <div class="row" style="gap:8px;margin-top:8px"><button class="btn sm pri" data-a="v_ovgo">Ja, aanzetten</button><button class="btn sm" data-a="v_ovchk">Annuleren</button></div></div>`}
+async function ovenGo(stop){const x=dayPlan(RS.ds).items.find(i=>i.id===RS.id);const R=x&&REC[x.meal];const el=document.getElementById('ovst');const key=R.oven.dev;
+  try{if(stop){await ovenStop(key);el.textContent='Programma gestopt.';return}const f=await ovenStart(key,R.oven);el.innerHTML=`✓ Voorverwarmen gestart${f?' (snel voorverwarmen)':''}. Je krijgt de melding van je Keuken-hub als hij op temperatuur is. <button class="btn sm" data-a="v_ovstop">Stoppen</button>`}
+  catch(e){el.innerHTML=e.message==='REMOTE'?`<div class="banner warn">De ${key} staat niet op <b>Start op afstand</b>. Druk op de oven op de Home Connect-/afstandsknop (of zet ‘Start op afstand’ aan in de oveninstellingen) en probeer het opnieuw. Dat is een veiligheidsregel van Bosch; dat kan de app niet overslaan.</div>`:`<div class="banner warn">Starten lukte niet: ${E(e.message)}</div>`}}
+async function ovenCheck(){const x=dayPlan(RS.ds).items.find(i=>i.id===RS.id);const R=x&&REC[x.meal];const el=document.getElementById('ovst');if(!el||!R)return;el.textContent='Status ophalen…';
+  try{const s=await ovenState(R.oven.dev);const SL={inactive:'uit',ready:'klaar',run:'bezig',finished:'klaar',delayedstart:'uitgestelde start',pause:'gepauzeerd',actionrequired:'actie nodig',error:'fout'};el.innerHTML=`Status: ${E(SL[s.status]||s.status||'onbekend')} · binnen ${s.temp!=null?E(s.temp)+' °C':'—'} · start op afstand: ${s.remote==='on'?'<b style="color:var(--ok)">aan</b>':'<b>uit</b> (druk op de knop op de oven)'}`}catch(e){el.textContent='Kon status niet ophalen: '+e.message}}
+/* ---------- voedingswaarden: SCHATTING (gangbare gemiddelden, per 100 g/ml of per stuk/snee/tl) — geen gemeten waarden ---------- */
+const NUT={havermout:[13,370],melk:[3.5,46],whey:[78,380],skyr:[11,63],lfkwark:[9,65],kaas:[29,290],geraspt:[27,380],lfroom:[2.5,200],spread:[0,540],
+ volkoren:[3.5,85],wrap:[5,170],pasta:[5.5,150],gfpasta:[3,150],rijst:[2.7,130],aardappel:[2,80],gfcracker:[7,400],zadencracker:[4,90],rijstwafel:[0.7,28],maiswafel:[0.7,30],
+ kip:[23,110],zalm:[20,200],kabeljauw:[18,80],tonijn:[25,115],kipbeleg:[20,105],kalkoen:[22,105],rund:[21,130],gehakt:[20,170],kipgehakt:[19,140],ei:[7,80],
+ courgette:[1.5,20],paprika:[1,30],champignons:[3,22],broccoli:[3,35],sperzie:[2,30],wortel:[0.8,35],komkommer:[0.6,12],sla:[1.3,15],tomaat:[0.9,20],spinazie:[2.9,23],wok:[2,30],rauwkost:[1,25],passata:[1.3,30],ui:[1.2,40],knoflook:[6,150],olijven:[1,145],
+ banaan:[1.3,105],druiven:[0.7,70],appel:[0.4,80],aardbei:[0.7,35],sinaas:[1.2,70],mango:[0.8,60],kiwi:[0.8,45],fruit:[1,75],citroen:[0.5,15],
+ pindakaas:[25,600],noten:[20,620],amandel:[21,600],avocado:[2,200],olie:[0,900],hummus:[7,270],honing:[0.3,320],crunchy:[22,400],kruiden:[0,5],
+ kipsoep:[3,35],paprikasoep:[1,40],courgettesoep:[1,30]};
+const NUTDRY={pasta:[12,355],gfpasta:[7,350],rijst:[7,350]};
+function nutOf(list){let p=0,k=0,miss=0;for(const [i,q,u] of list||[]){const n=NUT[i];if(!n||!(q>0)){miss++;continue}const dry=u==='g droog'&&NUTDRY[i];const nn=dry||n;const f=(u==='g'||u==='ml'||u==='g droog')?q/100:q;p+=nn[0]*f;k+=nn[1]*f}return{p,k,miss}}
+function nutItem(x,w){return nutOf(variant(x.meal,w,w==='k'?x.ingK:x.ingP))}
+function isEaten(ds,id,w){const d=F.eaten&&F.eaten[ds];return!!(d&&d[id]&&d[id].includes(w))}
+function dayNut(ds,w,plan){const P=plan||dayPlan(ds);const r={plan:{p:0,k:0},got:{p:0,k:0},n:0,done:0,target:(F.people[w]||{}).prot||0};
+  P.items.filter(x=>x.who.includes(w)).forEach(x=>{const v=nutItem(x,w);r.plan.p+=v.p;r.plan.k+=v.k;r.n++;if(isEaten(ds,x.id,w)){r.got.p+=v.p;r.got.k+=v.k;r.done++}});return r}
+function curW(){try{return/patricia/i.test(S.profile.name||'')?'p':'k'}catch(e){return'k'}}
+function kcalDay(p){let k=0,unk=0;p.items.filter(x=>x.who.includes('k')).forEach(x=>{const m=M[x.meal];if(!x.ingK&&m&&m.kk)k+=m.kk;else{const v=nutItem(x,'k');k+=v.k;unk++}});return{k:Math.round(k/10)*10,unk}}
 
 /* ---------- agenda Kristiaan: op pad / thuis ---------- */
 function kKind(t){t=t||'';if(/kristiaan thuis|\bthuis\b/i.test(t)&&t.length<30)return['home',''];if(/niet eerder weg/i.test(t))return['notbefore',''];const m=t.match(/^([A-Za-zÀ-ÿ'\- ]{2,30}):\s/);if(m)return['out',m[1].trim()];return[null,'']}
@@ -177,14 +253,15 @@ async function syncK(){const K=F.kroster;if(!K.on)return{skip:true};if(!window.H
 /* ---------- agenda via Home Assistant ---------- */
 /* Type van een dienst: eerst op naam; staan alle diensten als 'Werken' in de agenda, dan op begintijd (Amsterdam-tijd). */
 function typeByTime(start,end){const h=tm(start.slice(11))/60;const over=end&&end.slice(0,10)>start.slice(0,10);if(h>=20||(over&&h>=18)||h<4)return'nacht';if(h>=12)return'avond';return'dag'}
-function classify(sum,start,end){const s=(sum||'').toLowerCase();const kw=F.roster.kw;for(const t of ['nacht','avond','dag']){const ks=(kw[t]||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);if(ks.some(k=>s.includes(k)))return t}
-  return F.roster.allShifts&&start?typeByTime(start,end):null}
+const isWork=t=>/werk|dienst/i.test(t||'');
+function classify(sum,start,end){const s=(sum||'').toLowerCase();if(!isWork(sum))return null;const kw=F.roster.kw;for(const t of ['nacht','avond','dag']){const ks=(kw[t]||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);if(ks.some(k=>s.includes(k)))return t}
+  return F.roster.allShifts&&start&&isWork(sum)?typeByTime(start,end):null}
 async function syncCal(){const R=F.roster;if(!R.entity||!R.consent)return{err:'Kies eerst een agenda en geef toestemming.'};if(!window.HEALTH||!HEALTH.haGet)return{err:'Koppel eerst Home Assistant (Gezondheid → Koppelen).'};
   const from=new Date(Date.now()-2*864e5),to=new Date(Date.now()+28*864e5);
   try{const ev=await HEALTH.haGet(`/api/calendars/${encodeURIComponent(R.entity)}?start=${encodeURIComponent(from.toISOString())}&end=${encodeURIComponent(to.toISOString())}`);
     const got=[];for(const e of ev||[]){if(!e.start||!e.start.dateTime)continue;const start=ams(new Date(e.start.dateTime)),end=ams(new Date(e.end.dateTime));const type=classify(e.summary,start,end);if(!type)continue;const id='ha:'+(e.uid||'')+(e.recurrence_id||'')+'@'+(e.uid?'':start+e.summary);got.push({id,type,start,end,src:'ha',title:e.summary})}
     const lo=ams(from).slice(0,10),hi=ams(to).slice(0,10);const before=F.shifts.filter(s=>s.src==='ha');
-    const keep=F.shifts.filter(s=>s.src!=='ha'||s.start.slice(0,10)<lo||s.start.slice(0,10)>hi);
+    const keep=F.shifts.filter(s=>s.src!=='ha'||((s.start.slice(0,10)<lo||s.start.slice(0,10)>hi)&&(!F.roster.allShifts||isWork(s.title))));
     const changes={nieuw:got.filter(g=>!before.some(b=>b.id===g.id)).length,gewijzigd:got.filter(g=>before.some(b=>b.id===g.id&&(b.start!==g.start||b.end!==g.end))).length,vervallen:before.filter(b=>b.start.slice(0,10)>=lo&&b.start.slice(0,10)<=hi&&!got.some(g=>g.id===b.id)).length};
     F.shifts=keep.concat(got);R.lastSync=Date.now();R.err='';R.lastChanges=changes;save();return{ok:true,n:got.length,changes}}
   catch(e){R.err=e.message;save();return{err:e.message}}}
@@ -202,15 +279,26 @@ function rosterBanner(mon){const R=F.roster;const sun=addDays(mon,6);const n=shi
     if(age>24)return`<div class="banner warn">Rooster mogelijk verouderd: laatste synchronisatie ${Math.round(age)} uur geleden. <button class="btn sm" data-a="v_sync">Nu ophalen</button></div>`;
     return`<div class="small mut" style="margin:0 2px 10px">Rooster uit agenda · ${n} dienst(en) deze week · bijgewerkt ${new Date(R.lastSync).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</div>`}
   return n?`<div class="small mut" style="margin:0 2px 10px">Rooster handmatig ingevoerd · ${n} dienst(en) deze week</div>`:`<div class="banner warn">Rooster onbekend voor deze week: voorstellen gaan uit van vrije dagen. <button class="btn sm" data-a="v_seg" data-k="rooster">Diensten invoeren</button></div>`}
-function vWeek(){const mon=addDays(monday(today()),F.ui.wk*7);let h=`<div class="row sp" style="margin:0 2px 10px"><button class="ibtn" data-a="v_wk" data-k="-1">‹</button><b>Week van ${fmtD(mon)}</b><button class="ibtn" data-a="v_wk" data-k="1">›</button></div>`+rosterBanner(mon);
+const eatBtn=(ds,x,w)=>{const on=isEaten(ds,x.id,w);return`<button class="chip${on?' on':''}" data-a="v_eat" data-d="${ds}" data-k="${E(x.id)}" data-w="${w}" style="padding:3px 9px">${on?'✓':'○'} ${PN[w][0]}</button>`};
+function itemCard(x,ds,d,full,only){const past=ds<=today();const ws=only?x.who.filter(w=>w===only).concat(x.who.filter(w=>w!==only)):x.who;
+  return`<div class="li" data-a="v_rec" data-d="${ds}" data-k="${E(x.id)}" style="align-items:flex-start;padding:8px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line);${x.who.length>1?'':x.who[0]==='p'?'border-left:3px solid #f9a8d4':'border-left:3px solid #a5b4fc'}">
+   <div class="grow" style="min-width:0"><div class="row sp tiny"><b style="${x.time?'':'color:var(--warn)'}">${x.time||'open'}${x.at&&x.at.slice(0,10)>ds?' '+DS[(d+1)%7]:''}</b><span class="mut">${SLOT[x.t]||''}${x.gezin?' · gezin':''}${REC[x.meal]&&REC[x.meal].oven?' · 🔥':''}</span></div>
+   <div class="small" style="margin-top:2px;line-height:1.25">${E(M[x.meal]?M[x.meal].n:x.meal)} ${x.src==='vast'?'📌':''}</div>
+   <div class="row wrap" style="gap:4px;margin-top:5px">${past?ws.map(w=>eatBtn(ds,x,w)).join(''):chipW(ws)}${x.mee&&(x.mee.k||x.mee.p)?`<span class="chip warn" style="padding:2px 7px">mee${x.who.length>1?': '+['k','p'].filter(w=>x.mee[w]).map(w=>PN[w][0]).join(','):''}</span>`:''}<span class="tiny mut" style="align-self:center">≈${ws.map(w=>Math.round(nutItem(x,w).p)).join('/')} g eiwit</span></div>
+   ${full?diffP(x)+(x.reason.length?`<div class="tiny mut" style="margin-top:3px">${E(x.reason.join(' · '))}</div>`:''):''}</div></div>`}
+function weekItems(p,ds,d){const wv=F.ui.wv||'naast';
+  if(wv!=='naast'){const L=p.items.filter(x=>x.who.includes(wv));const other=p.items.filter(x=>!x.who.includes(wv)).length;
+    return`<div style="display:grid;gap:6px;margin-top:8px">${L.map(x=>itemCard(x,ds,d,true,wv)).join('')||'<div class="small mut">Geen maaltijden.</div>'}</div>${other?`<div class="tiny mut" style="margin-top:4px">${other} maaltijd(en) alleen voor ${PN[wv==='k'?'p':'k']} verborgen.</div>`:''}`}
+  const rows=[];let open=null;p.items.forEach(x=>{if(x.who.length>1){open=null;rows.push({both:x});return}const w=x.who[0];if(open&&!open[w]){open[w]=x}else{open={[w]:x};rows.push(open)}});
+  return`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px"><div class="tiny" style="color:#c7d2fe;font-weight:700">Kristiaan</div><div class="tiny" style="color:#f9a8d4;font-weight:700">Patricia</div>
+   ${rows.map(r=>r.both?`<div style="grid-column:1/-1">${itemCard(r.both,ds,d,false)}</div>`:`<div>${r.k?itemCard(r.k,ds,d,false):''}</div><div>${r.p?itemCard(r.p,ds,d,false):''}</div>`).join('')}</div>`}
+function weekViewSeg(){const wv=F.ui.wv||'naast';return`<div class="seg" style="margin:0 0 10px">${[['naast','Naast elkaar'],['k','Alleen Kristiaan'],['p','Alleen Patricia']].map(([k,l])=>`<button class="${wv===k?'on':''}" data-a="v_wv" data-k="${k}">${l}</button>`).join('')}</div>`}
+function vWeek(){const mon=addDays(monday(today()),F.ui.wk*7);let h=`<div class="row sp" style="margin:0 2px 10px"><button class="ibtn" data-a="v_wk" data-k="-1">‹</button><b>Week van ${fmtD(mon)}</b><button class="ibtn" data-a="v_wk" data-k="1">›</button></div>`+weekViewSeg()+rosterBanner(mon);
   for(let d=0;d<7;d++){const ds=addDays(mon,d);const p=dayPlan(ds);const kc=kcalDay(p);const isT=ds===today();
     h+=`<div class="card" ${isT?'style="border-color:rgba(165,180,252,.6)"':''}><div class="row sp"><div><b>${DN[d]} ${fmtD(ds)}</b>${isT?' <span class="chip on" style="padding:1px 7px">vandaag</span>':''}</div><span class="tiny mut">${p.trainDay?'trainingsdag K':'rustdag K'}</span></div>
      ${p.shifts.map(x=>`<div class="chip" style="margin-top:6px;border-color:rgba(249,168,212,.45);color:#f9a8d4">Patricia: ${E(x.lab)}${x.s.src==='ha'?' · agenda':''}</div>`).join(' ')}${p.ending.length?'<div class="chip" style="margin-top:6px">Patricia: na nachtdienst</div>':''}${(p.kNotes||[]).map(n=>`<div class="chip" style="margin-top:6px;border-color:rgba(165,180,252,.5);color:#c7d2fe">Kristiaan: ${E(n)}</div>`).join(' ')}
-     <div class="list" style="margin-top:6px">${p.items.map(x=>`<div class="li" data-a="v_edit" data-d="${ds}" data-k="${E(x.id)}" style="align-items:flex-start"><div style="min-width:46px;font-weight:700;${x.time?'':'color:var(--warn)'}">${x.time||'open'}${x.at&&x.at.slice(0,10)>ds?'<div class="tiny mut">'+DS[(d+1)%7]+'</div>':''}</div>
-       <div class="grow"><div class="tiny mut">${SLOT[x.t]||''}${x.gezin?' · gezin':''}</div><div>${E(M[x.meal]?M[x.meal].n:x.meal)} ${x.src==='vast'?'📌':''}</div>
-       <div class="row wrap" style="gap:4px;margin-top:3px">${chipW(x.who)}${x.mee&&(x.mee.k||x.mee.p)?`<span class="chip warn" style="padding:2px 7px">mee naar werk${x.who.length>1?': '+['k','p'].filter(w=>x.mee[w]).map(w=>PN[w]).join(', '):''}</span>`:''}</div>
-       ${diffP(x)}${x.reason.length?`<div class="tiny mut" style="margin-top:3px">${E(x.reason.join(' · '))}</div>`:''}</div></div>`).join('')}</div>
-     <div class="tiny mut" style="margin-top:6px">Kristiaan: ${kc.k?'≈ '+kc.k.toLocaleString('nl-NL')+' kcal bekend'+(kc.unk?` + ${kc.unk} maaltijd(en) zonder waarde`:''):'kcal per maaltijd onbekend (nieuwe recepten)'} · doel ${(p.trainDay?F.people.k.kcalTrain:F.people.k.kcalRest).toLocaleString('nl-NL')}. Patricia: waarden per maaltijd onbekend, dagdoel ±${F.people.p.kcal.toLocaleString('nl-NL')}.</div>
+     ${weekItems(p,ds,d)}
+     ${ds<=today()?['k','p'].map(w=>{const n=dayNut(ds,w,p);if(!n.n)return'';const pc=n.target?Math.min(100,n.got.p/n.target*100):0;return`<div style="margin-top:8px"><div class="row sp tiny"><span>${PN[w]}: ${Math.round(n.got.p)} / ${n.target} g eiwit</span><span class="mut">${n.done}/${n.n} gegeten · ≈ ${Math.round(n.got.k).toLocaleString('nl-NL')} kcal</span></div><div style="height:6px;border-radius:4px;background:rgba(255,255,255,.08);margin-top:3px"><div style="height:100%;width:${pc}%;border-radius:4px;background:${w==='p'?'#f9a8d4':'#a5b4fc'}"></div></div></div>`}).join(''):''}<div class="tiny mut" style="margin-top:6px">Kristiaan: ≈ ${kc.k.toLocaleString('nl-NL')} kcal gepland${kc.unk?` (${kc.unk} maaltijd(en) geschat uit ingrediënten)`:''} · doel ${(p.trainDay?F.people.k.kcalTrain:F.people.k.kcalRest).toLocaleString('nl-NL')}. Patricia: ≈ ${Math.round(dayNut(ds,'p',p).plan.k).toLocaleString('nl-NL')} kcal gepland, dagdoel ±${F.people.p.kcal.toLocaleString('nl-NL')}. Eiwit en kcal zijn schattingen op basis van gemiddelde voedingswaarden, geen metingen.</div>
      <button class="btn sm" style="margin-top:8px" data-a="v_add" data-d="${ds}">+ Maaltijd</button></div>`}
   return h}
 const TS=[[1,'👍','lekker'],[0,'·','neutraal'],[-1,'👎','niet lekker']];
@@ -232,7 +320,7 @@ function vRooster(){const pp=F.pp,R=F.roster;const up=shiftsAll().filter(s=>s.en
    <button class="btn sm" style="margin-top:8px" data-a="v_cals">Agenda's in Home Assistant zoeken</button><div id="v_calmsg" class="small" style="margin-top:6px"></div>
    <label class="lb">Agenda (entity)</label><input class="f" id="v_ent" value="${E(R.entity)}" placeholder="calendar.patricia_werk" autocapitalize="off">
    <div class="grid2"><div><label class="lb">Avonddienst heet</label><input class="f" id="v_kwa" value="${E(R.kw.avond)}"></div><div><label class="lb">Nachtdienst heet</label><input class="f" id="v_kwn" value="${E(R.kw.nacht)}"></div></div>
-   <label class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="v_all" ${R.allShifts?'checked':''} style="margin-top:3px"><span class="small">Elke afspraak in deze agenda is een dienst (bijv. alles heet "Werken"). Type op begintijd: vanaf 20:00 nacht, vanaf 12:00 avond, anders dag.</span></label>
+   <label class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="v_all" ${R.allShifts?'checked':''} style="margin-top:3px"><span class="small">Alleen afspraken met "werken" (of "dienst") in de titel tellen als dienst; andere afspraken zoals "Meiden wedstrijd" of "Gerry past op" worden genegeerd. Type op begintijd: vanaf 20:00 nacht, vanaf 12:00 avond, anders dag.</span></label>
    <label class="lb">Dagdienst heet (optioneel)</label><input class="f" id="v_kwd" value="${E(R.kw.dag)}"><div class="tiny mut" style="margin-top:4px">Meerdere woorden scheiden met een komma. Afspraken zonder deze woorden worden genegeerd.</div>
    <label class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="v_cons" ${R.consent?'checked':''} style="margin-top:3px"><span class="small">Patricia vindt het goed dat de app haar werkafspraken uit deze agenda leest. Alleen titel, begin en eind van diensten worden op dit apparaat bewaard.</span></label>
    <div class="row" style="gap:8px;margin-top:10px"><button class="btn pri grow" data-a="v_calsave">Opslaan en ophalen</button>${R.src==='ha'?'<button class="btn" data-a="v_sync">Nu ophalen</button>':''}</div>
@@ -305,12 +393,17 @@ function saveShift(){const g=id=>document.getElementById(id);const s=SH;const ex
 document.addEventListener('click',async ev=>{const t=ev.target.closest('[data-a^="v_"],[data-a^="s_"]');if(!t)return;const a=t.dataset.a,k=t.dataset.k;
   if(a==='v_seg'){F.ui.seg=k;save();render();scrollTo(0,0)}
   else if(a==='v_wk'){F.ui.wk+=+k;save();render()}
+  else if(a==='v_eat'){const ds=t.dataset.d,w=t.dataset.w;F.eaten=F.eaten||{};const d=F.eaten[ds]=F.eaten[ds]||{};const l=d[k]=d[k]||[];const i=l.indexOf(w);if(i>=0)l.splice(i,1);else l.push(w);
+    const keys=Object.keys(F.eaten).sort();while(keys.length>60)delete F.eaten[keys.shift()];save(true);render()}
   else if(a==='v_tp'){F.ui.tp=k;save();render()}
   else if(a==='v_ing'){const w=F.ui.tp,P=F.people[w],T=F.taste[w].ing;if(w==='p'&&P.gluten&&iF(k).g){toast('Gluten zijn uitgesloten zolang "Altijd glutenvrij" aan staat.');return}
     const ex=P.excl.includes(k),cur=T[k]||0;if(ex){P.excl=P.excl.filter(x=>x!==k);delete T[k]}else if(cur===0)T[k]=1;else if(cur===1)T[k]=-1;else{delete T[k];P.excl.push(k)}save();render()}
   else if(a==='v_meal'){const T=F.taste[F.ui.tp].meal;T[k]=T[k]===+t.dataset.v?0:+t.dataset.v;save();render()}
   else if(a==='v_regen'){F.base=genBase();save();render();toast('Basisweek opnieuw gemaakt.')}
   else if(a==='v_edit')editSheet(t.dataset.d,k);
+  else if(a==='v_rec')recipeSheet(t.dataset.d,k);
+  else if(a==='v_ovask')ovenAsk();else if(a==='v_ovgo')ovenGo();else if(a==='v_ovstop')ovenGo(true);else if(a==='v_ovchk')ovenCheck();
+  else if(a==='v_wv'){F.ui.wv=k;save(true);render()}
   else if(a==='v_add')editSheet(t.dataset.d,null,true);
   else if(a==='v_save')commit(k);
   else if(a==='v_del'){const ov=F.over[ED.ds]||(F.over[ED.ds]={});ov[ED.x.id]={deleted:true};save();ED=null;closeSheet();render()}
@@ -339,6 +432,7 @@ async function autoSync(){let ch=false;try{ch=await pull()}catch(e){}
   if(F.kroster.on&&(!F.kroster.lastSync||Date.now()-F.kroster.lastSync>30*6e4)){const r=await syncK();ch=ch||r.ok}
   if(ch&&typeof S!=='undefined'&&['voeding','home'].includes(S.ui.tab))render()}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoSync()});
-function todayCard(){const p=dayPlan(today());const now=tm(ams(new Date()).slice(11));const nx=p.items.find(x=>x.time&&tm(x.time)>=now-15);if(!nx)return'';return`<div class="small mut">Volgende maaltijd</div><b>${nx.time} · ${E(M[nx.meal]?M[nx.meal].n:'')}</b>`}
-window.VOED={pull,push,syncK,load,view,dayPlan,genBase,syncCal,autoSync,todayCard,get F(){return F},set F(v){F=v},M,ING,exportData:()=>F,importData:d=>{if(d&&d.base){F={...DEF(),...d};saveNow()}},saveNow,_t:{kKind,absMin,fromAbs,addDays,dowOf,monday,classify,allowed,variant,today,ams}};
+function todayCard(){const p=dayPlan(today());const now=tm(ams(new Date()).slice(11));const nx=p.items.find(x=>x.time&&tm(x.time)>=now-15);const w=curW();const n=dayNut(today(),w,p);
+  const pr=n.n?`<div class="tiny mut" style="margin-top:4px">Eiwit vandaag: ${Math.round(n.got.p)} / ${n.target} g (schatting, ${n.done}/${n.n} afgevinkt)</div>`:'';if(!nx)return pr;return`<div class="small mut">Volgende maaltijd</div><b>${nx.time} · ${E(M[nx.meal]?M[nx.meal].n:'')}</b>`+pr}
+window.VOED={pull,push,syncK,load,view,dayPlan,genBase,syncCal,autoSync,todayCard,dayNut,nutOf,NUT,REC,get F(){return F},set F(v){F=v},M,ING,exportData:()=>F,importData:d=>{if(d&&d.base){F={...DEF(),...d};saveNow()}},saveNow,_t:{nutItem,isEaten,recipeSheet,ovenStart,classify,setHA:h=>{HA=h},kKind,absMin,fromAbs,addDays,dowOf,monday,classify,allowed,variant,today,ams}};
 })();
