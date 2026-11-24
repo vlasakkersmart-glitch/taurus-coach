@@ -941,11 +941,63 @@ function openWeek(){const R=weekRange();const W=weekData(R.a,R.b);const pa=new D
   ${B.length?`<h3>Metingen</h3>${B.map(b=>row(fmtDate(b.date),[b.weight!=null?kg(b.weight)+' kg':'',...Object.keys(MAATL).filter(k=>b[k]!=null).map(k=>MAATL[k].toLowerCase()+' '+kg(b[k]))].filter(Boolean).join(' · '))).join('')}`:''}
   <h3>Volgende week</h3>${row('Doel',S.profile.freq+' trainingen')}${shifts.length?row('Diensten Patricia',esc(shifts.join(', '))):''}
   <div class="tiny mut" style="margin-top:10px">Alles uit je eigen gegevens op dit apparaat en je Home Assistant. Eiwit is een schatting op basis van afgevinkte maaltijden.</div>`)}
+/* ---------- handleiding in de app ---------- */
+const HELP=[
+['🗓️','Een gewone dag',`<table class="htab"><tr><th>Moment</th><th>Waar</th><th>Wat</th></tr>
+<tr><td>Ochtend</td><td>Vandaag</td><td>Readiness bekijken; zien welke training en maaltijden gepland staan</td></tr>
+<tr><td>Na het eten</td><td>Voeding → Week</td><td>Maaltijd afvinken (○ K / ○ P)</td></tr>
+<tr><td>Voor het koken</td><td>Voeding → tik op maaltijd</td><td>Recept, wie eet mee, oven voorverwarmen</td></tr>
+<tr><td>Trainen</td><td>Taurus → Train</td><td>Sets invullen, RIR kiezen, rusttimer</td></tr>
+<tr><td>Wegen</td><td>—</td><td>Gewicht komt vanzelf binnen</td></tr>
+<tr><td>Elke 2–4 weken</td><td>Voortgang → Lichaam</td><td>Lichaamsmaten invullen</td></tr>
+<tr><td>Zo / ma</td><td>Vandaag</td><td>Weekoverzicht bekijken</td></tr></table><p>De back-up gaat vanzelf.</p>`],
+['🏋️','Trainen',`<ol><li>Kies op Vandaag het geplande schema, of <b>Zelf kiezen</b>: vink spiergroepen aan (bijv. borst en benen) en kies hoeveel tijd je hebt.</li>
+<li>Bij elke oefening zie je de 3D-animatie, de spieren en de stand van de Taurus.</li>
+<li>Vul gewicht en herhalingen in en tik op het vinkje.</li>
+<li>Kies daarna <b>RIR</b>: hoeveel herhalingen had je nog gekund (0–4+)? Bij 0 gaat het gewicht minder snel omhoog.</li>
+<li>De <b>rusttimer</b> start vanzelf en piept als de rust voorbij is.</li>
+<li>Tik aan het eind op <b>Afronden</b>. Nieuwe records krijgen confetti.</li></ol>
+<p>Via ⋯ bij een set markeer je een warming-up of sla je een set over. <b>Buikspieren</b> (startscherm) heeft schema's A, B en C, ieder met eigen voortgang.</p>`],
+['📈','Voortgang',`<ul><li><b>Overzicht</b>: spierbelasting en de knop <b>Weekoverzicht</b>.</li>
+<li><b>Oefening</b>: gewichten, beste set en trend per oefening.</li>
+<li><b>Lichaam</b>: gewicht, vet%, spiermassa, maten (taille, borst, arm, heup, bovenbeen) en foto's. Meet ’s ochtends nuchter op dezelfde plek; minder dan 1 cm verschil is meetfout.</li>
+<li><b>Historie</b> en <b>Kalender</b>: al je trainingen.</li></ul>
+<p>Het <b>weekoverzicht</b> (zo/ma ook op Vandaag) toont trainingen, sets, volume, records, gewicht, slaap, eiwit en de diensten van Patricia voor volgende week.</p>`],
+['❤️','Gezondheid en readiness',`<p>Gewicht komt van de FITAGE-weegschaal, hartslag, HRV, stappen en slaap van de Apple Watch, via Home Assistant. Alleen wegingen binnen jouw bereik tellen; die van de kinderen worden nooit opgeslagen.</p>
+<p><b>Readiness</b> is berekend: HRV 35%, rusthartslag 30%, slaap 35%, steeds vergeleken met jouw eigen normaal, en lager na veel sets in 48 uur.</p>
+<ul><li>75+ : zwaar trainen mag</li><li>50–74 : normaal</li><li>&lt;50 : licht of rust</li></ul>
+<p>Geen diagnose; bij twijfel over je gezondheid: huisarts.</p>`],
+['🥗','Voeding',`<ul><li><b>Week</b>: kies <b>Naast elkaar</b>, <b>Alleen Kristiaan</b> of <b>Alleen Patricia</b>. Paarse rand = Kristiaan, roze = Patricia, 🔥 = oven, 📌 = vastgezet.</li>
+<li><b>Afvinken</b>: tik ○ K / ○ P na het eten. Onder de dag zie je je eiwit (bijv. 120 / 180 g). Dit zijn schattingen.</li>
+<li><b>Recept</b>: tik op een maaltijd. Stel in wie er mee-eet (kind = ½, gast = ¾ portie); <b>Totaal koken</b> rekent mee. Daaronder kruiden en bereiding.</li>
+<li><b>Maaltijd aanpassen</b>: onderaan het recept. Ander gerecht, tijd, wie, mee naar werk.</li>
+<li><b>Recepten</b>: alle recepten bij elkaar, ovengerechten bovenaan.</li>
+<li><b>Smaak</b>: per persoon aanvinken wat je (niet) lekker vindt.</li>
+<li><b>Diensten</b>: Patricia's diensten komen uit haar agenda Werk; alleen afspraken met “werken” tellen.</li></ul>`],
+['🔥','Oven en stoomoven',`<ol><li>Druk op het apparaat op <b>Start op afstand</b> (Home Connect-knop). Wacht daarna een minuut.</li>
+<li>Open het recept. Oranje blok 🔥 = oven, blauw blok ♨️ = stoomoven.</li>
+<li><b>Nu voorverwarmen</b> zet de oven op de juiste stand; de Keuken-hub meldt als hij warm is.</li>
+<li><b>Stomen starten</b>: eerst water in het reservoir en de groente erin. Hij stopt vanzelf na de tijd uit het recept.</li>
+<li><b>Status</b> toont temperatuur en of Start op afstand aan staat; <b>Stoppen</b> zet hem uit.</li></ol>
+<p>Tik niet vaak snel achter elkaar: Bosch staat max. 50 opdrachten per minuut toe voor al je apparaten samen.</p>`],
+['💾','Back-up',`<p>De back-up naar Home Assistant gaat vanzelf: na elke training, als je de app wegklikt na een wijziging, elk half uur en elke dag bij openen. De vorige versie wordt ook bewaard.</p>
+<p>Zelf een extra back-up: Instellingen → <b>Nu back-up maken</b>. Is de laatste ouder dan 3 dagen, dan zie je een melding op Vandaag.</p>
+<p><b>Terugzetten</b>: welkomstscherm of Instellingen → Herstellen uit Home Assistant.</p>`],
+['🛠️','Als iets niet werkt',`<table class="htab"><tr><th>Probleem</th><th>Oplossing</th></tr>
+<tr><td>Nieuwe functies niet te zien</td><td>Instellingen → <b>App bijwerken</b></td></tr>
+<tr><td>Home Assistant niet bereikbaar</td><td>Tailscale aan op je telefoon; Acer aan?</td></tr>
+<tr><td>Oven start niet</td><td>Start op afstand aan, een minuut wachten, Status controleren</td></tr>
+<tr><td>Geen slaap of hartslag</td><td>Slaaptracking op de Watch aan; Health-sensoren in de HA-app aan</td></tr>
+<tr><td>Gewicht komt niet door</td><td>Gewichtsbereik bij Gezondheid → Koppeling beheren</td></tr>
+<tr><td>Verkeerde diensten Patricia</td><td>Titel moet “werken” bevatten</td></tr>
+<tr><td>Gegevens kwijt</td><td>Welkomstscherm → Herstellen uit Home Assistant</td></tr></table>`]];
+function openHelp(at){sheet(`<h2>Handleiding</h2><div class="small mut" style="margin-bottom:10px">Tik op een onderwerp. Versie ${APPV}.</div><style>.hlp{border:1px solid var(--line);border-radius:14px;margin:8px 0;padding:0 12px;background:rgba(255,255,255,.04)}.hlp summary{padding:12px 0;font-weight:700;cursor:pointer;list-style:none}.hlp summary::-webkit-details-marker{display:none}.hlp summary::after{content:'›';float:right;opacity:.6;transition:transform .2s}.hlp[open] summary::after{transform:rotate(90deg)}.hlp .bd{font-size:14px;line-height:1.45;padding-bottom:12px}.hlp ol,.hlp ul{padding-left:18px;margin:6px 0}.hlp li{margin:4px 0}.htab{width:100%;border-collapse:collapse;font-size:13px}.htab th,.htab td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:top}.htab th{opacity:.7;font-weight:600}</style>
+  ${HELP.map(([ic,t,b],i)=>`<details class="hlp"${i===(at==null?0:+at)?' open':''}><summary>${ic}&nbsp; ${t}</summary><div class="bd">${b}</div></details>`).join('')}`)}
 function vHome(){const h=new Date().getHours();const greet=h<6?'Goedenacht':h<12?'Goedemorgen':h<18?'Goedemiddag':'Goedenavond';
   const ws=S.workouts.filter(real);const wk=wkStart();const thisW=ws.filter(w=>new Date(w.date)>=wk).length;const nx=window.VOED?VOED.todayCard():'';
   const tile=(a,k,ic,t,sub,big)=>`<button class="card" data-a="${a}" data-k="${k}" style="display:block;width:100%;text-align:left;${big?'padding:20px':''}"><div class="row" style="gap:14px"><div style="width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.14);display:grid;place-items:center;font-size:26px">${ic}</div><div class="grow"><div style="font-size:${big?22:18}px;font-weight:800">${t}</div><div class="small mut">${sub}</div></div><span class="mut" style="font-size:22px">›</span></div></button>`;
-  return`<div class="hdr"><div><div class="sub">${greet}, ${esc(S.profile.name)}</div><h1>Wat gaan we doen?</h1></div><button class="ibtn" data-a="tab" data-k="instellingen" aria-label="Instellingen">${IC.gear}</button></div>
-  ${motivCard()}<div class="tiny mut" style="margin:4px 4px 8px;letter-spacing:.1em">SPORT</div>
+  return`<div class="hdr"><div><div class="sub">${greet}, ${esc(S.profile.name)}</div><h1>Wat gaan we doen?</h1></div><div class="row" style="gap:6px"><button class="ibtn" data-a="help" aria-label="Handleiding" style="font-weight:800;font-size:18px">?</button><button class="ibtn" data-a="tab" data-k="instellingen" aria-label="Instellingen">${IC.gear}</button></div></div>
+  ${newsCard()}${motivCard()}<div class="tiny mut" style="margin:4px 4px 8px;letter-spacing:.1em">SPORT</div>
   ${tile('tab','vandaag','🏋️','Taurus',`Krachttraining · ${thisW}/${S.profile.freq} deze week${S.active?' · training loopt':''}`,1)}
   ${tile('area','buik','🔥','Buikspieren','Kristiaan en Patricia, elk op eigen niveau')}
   <div class="tiny mut" style="margin:14px 4px 8px;letter-spacing:.1em">VOEDING</div>
@@ -1168,10 +1220,24 @@ function vCoach(){const k=S.ui.planKey||'A',P=S.plans[k];const items=buildItems(
   <div class="card"><h2>Hoe Sophie adviseert</h2><div class="small">Double progression: haal je bij alle werksets de bovenkant van de herhalingsreeks (met ≥1 RIR), dan adviseert ze de volgende stap van ${kg(S.profile.step)} kg. Twee keer onder de onderkant: iets lichter. Bij matig herstel (check-in) geen verhoging en een set minder. Na 3 trainingen zonder vooruitgang meldt ze stagnatie. Echte, geregistreerde trainingen gaan altijd voor op referentiegegevens.</div></div>`}
 
 /* ---- Instellingen ---- */
-const APPV='3.9.1';
+const APPV='3.9.4';
+/* 'Nieuw in deze versie': nieuwste eerst; h = index van het onderwerp in HELP */
+const CHANGES=[
+ {v:'3.9.4',items:[['Je ziet nu na een update wat er nieuw is (dit kaartje).',null]]},
+ {v:'3.9.3',items:[['Handleiding in de app: de ?-knop op het startscherm.',0]]},
+ {v:'3.9.2',items:[['Oven en stoomoven worden niet meer door elkaar gehaald; duidelijkere foutmelding.',5]]},
+ {v:'3.9.1',items:[['Automatische back-up naar Home Assistant, met melding als hij te oud is.',6]]},
+ {v:'3.8.5',items:[['Stoomoven starten vanuit het recept; stopt vanzelf.',5]]},
+ {v:'3.8.2',items:[['Tabblad Recepten en porties voor kinderen en gasten.',4]]}];
+const vnum=v=>(v||'0').split('.').map(Number).reduce((a,x)=>a*1000+x,0);
+function newsCard(){const seen=S.ui.seenV||'3.8.1';if(vnum(seen)>=vnum(APPV))return'';
+  const L=CHANGES.filter(c=>vnum(c.v)>vnum(seen)).flatMap(c=>c.items);if(!L.length)return'';
+  return`<div class="card" style="border-color:rgba(52,211,153,.5)"><div class="row sp"><h2 style="margin:0">✨ Nieuw in versie ${APPV}</h2><button class="ibtn" data-a="newsok" aria-label="Sluiten">✕</button></div>
+  <ul class="small" style="margin:8px 0 4px 18px;padding:0">${L.slice(0,6).map(([t,h])=>`<li style="margin:5px 0">${esc(t)}${h!=null?` <a href="#" data-a="helpat" data-k="${h}" style="color:var(--acc,#a5b4fc)">uitleg</a>`:''}</li>`).join('')}</ul>
+  <button class="btn sm" style="margin-top:6px" data-a="newsok">Begrepen</button></div>`}
 async function forceUpdate(){if(S.active){toast('Eerst je training afronden.');return}toast('App wordt opnieuw geladen…',3000);try{const rs=await navigator.serviceWorker.getRegistrations();for(const r of rs)await r.unregister();for(const k of await caches.keys())await caches.delete(k)}catch(e){}location.replace(location.pathname+'?u='+Date.now())}
 function vSettings(){const p=S.profile;const f=(k,l,t='text',x='')=>`<div><label class="lb">${l}</label><input class="f" type="${t}" ${t==='number'?'inputmode="decimal" step="any"':''} data-f="prof" data-k="${k}" value="${esc(p[k])}" ${x}></div>`;
-  return`<div class="hdr"><button class="ibtn" data-a="tab" data-k="vandaag">${IC.back}</button><h1 style="font-size:22px">Instellingen <span class="tiny mut" style="font-weight:400">v${APPV}</span></h1><button class="btn sm" data-a="forceupd">App bijwerken</button><span style="width:40px"></span></div>
+  return`<div class="hdr"><button class="ibtn" data-a="tab" data-k="vandaag">${IC.back}</button><h1 style="font-size:22px">Instellingen <span class="tiny mut" style="font-weight:400">v${APPV}</span></h1><button class="btn sm" data-a="forceupd">App bijwerken</button> <button class="btn sm" data-a="help">📖 Handleiding</button><span style="width:40px"></span></div>
   <div class="card"><h2>Profielen</h2><div class="small mut" style="margin-bottom:8px">Iedereen die op dit apparaat traint heeft een eigen profiel met eigen trainingen, schema's en metingen. Op je eigen telefoon heb je er meestal maar één nodig.</div>
    <div class="list">${META.profiles.map(pp=>`<div class="row sp"><span>${pp.id===META.current?'<b>'+esc(pp.name)+'</b> <span class="chip ok">actief</span>':esc(pp.name)}</span>${pp.id===META.current?'':`<button class="btn sm" data-a="profsw" data-id="${pp.id}">Wisselen</button>`}</div>`).join('')}</div>
    <div class="grid2" style="margin-top:10px"><button class="btn" data-a="profnew">+ Nieuw profiel</button><button class="btn bad" data-a="profdel">Dit profiel verwijderen</button></div></div>
@@ -1335,6 +1401,9 @@ document.addEventListener('click',ev=>{const t=ev.target.closest('[data-a]');if(
   case'addbody':{const b={date:$('#m_date').value||localISO().slice(0,10)};BODYF.map(x=>x[0]).forEach(k=>{const v=num($('#m_'+k).value);if(v!=null)b[k]=v});if(Object.keys(b).length<2){toast('Vul minstens één meting in.');break}S.body=S.body.filter(x=>x.date!==b.date).concat([{...(S.body.find(x=>x.date===b.date)||{}),...b}]);if(b.weight)S.profile.weight=b.weight;save();render();toast('Meting opgeslagen');break}
   case'weekov':openWeek();break;
   case'forceupd':forceUpdate();break;
+  case'help':openHelp();break;
+  case'helpat':openHelp(d.k);break;
+  case'newsok':S.ui.seenV=APPV;save();render();break;
   case'wsdismiss':S.ui.wsSeen=localISO().slice(0,10);save();render();break;
   case'delbody':S.body=S.body.filter(b=>b.date!==d.d);save();render();break;
   case'addphoto':pickFile('photo','image/*');break;

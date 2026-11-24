@@ -1,5 +1,5 @@
 /* Taurus Coach service worker — offline + updates */
-const VERSION='taurus-v3.9.1';
+const VERSION='taurus-v3.9.4';
 const SHELL=['./','./index.html','./anim.js','./health.js','./voeding.js','./buik.js','./manifest.webmanifest','./icon-180.png','./icon-192.png','./icon-512.png'];
 const THREE='https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js';
 self.addEventListener('install',e=>{e.waitUntil(caches.open(VERSION).then(c=>c.addAll(SHELL.map(u=>new Request(u,{cache:'reload'})))).then(()=>caches.open(VERSION).then(c=>c.add(THREE).catch(()=>{})))) });
