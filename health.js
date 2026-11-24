@@ -122,10 +122,11 @@ async function sync(opts={}){if(busy)return{skip:true};if(!configured()){return{
     /* Gedeelde weegschaal: alleen wegingen binnen MIJN weegbereik horen bij mij; vet-/spierwaarden alleen als ze bij zo'n weging horen. */
     const wr=range();const wArr=(res||[]).find(a=>a&&a.length&&a[0].entity_id===map.weight)||[];const rawW=[];
     for(const r of wArr){const v=conv('weight',parseFloat(r.state),CFG.units.weight);const t=Date.parse(r.last_changed||r.last_updated);if(!isNaN(v)&&t&&v>0)rawW.push([t,v])}
+    const shared=id=>/weegschaal|fitage|scale|account/i.test(id)||!/iphone|ipad|watch|health/i.test(id);
     const mine=t=>{const near=rawW.filter(p=>Math.abs(p[0]-t)<10*6e4);return near.length&&near.some(p=>p[1]>=wr[0]&&p[1]<=wr[1])};let skipped=0;
     for(const arr of (res||[])){if(!arr||!arr.length)continue;const eid=arr[0].entity_id;const ms=Object.keys(map).filter(k=>map[k]===eid);
       for(const m of ms){const unit=CFG.units[m]||'';const pts=[];for(const r of arr){const v=parseFloat(r.state);if(isNaN(v))continue;const t=Date.parse(r.last_changed||r.last_updated);if(!t)continue;const cv=conv(m,v,unit);if(!plausible(m,cv))continue;
-          if(METRICS[m].grp==='body'&&map.weight){if(m==='weight'?(cv<wr[0]||cv>wr[1]):!mine(t)){skipped++;continue}}pts.push([t,cv])}
+          if(METRICS[m].grp==='body'&&map.weight&&shared(eid)){if(m==='weight'?(cv<wr[0]||cv>wr[1]):!mine(t)){skipped++;continue}}pts.push([t,cv])}
         added[m]=(added[m]||0)+addSamples(m,pts)}}
     if(skipped)HD.log.unshift({t:now,msg:skipped+' weegwaarden van andere gezinsleden overgeslagen (buiten '+wr[0]+'–'+wr[1]+' kg).'});
     if(first){try{const sids=ORDER.filter(m=>map[m]&&m!=='hr'&&METRICS[m].grp!=='body');const st=await wsStats(sids.map(m=>map[m]),now-730*DAY);
