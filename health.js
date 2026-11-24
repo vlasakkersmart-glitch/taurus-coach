@@ -358,6 +358,6 @@ function exportData(){return HD?{v:1,series:HD.series,daily:HD.daily}:null}
 async function importData(d){if(!d||!d.series)return 0;let n=0;for(const m in d.series){if(!METRICS[m]||!Array.isArray(d.series[m]))continue;n+=addSamples(m,d.series[m].filter(p=>Array.isArray(p)&&isFinite(p[0])&&isFinite(p[1])))}
   for(const m in (d.daily||{})){if(!METRICS[m])continue;const t=HD.daily[m]||(HD.daily[m]={});for(const k in d.daily[m])if(t[k]==null&&isFinite(d.daily[m][k]))t[k]=d.daily[m][k]}await saveHD();return n}
 
-window.HEALTH={range,haBackup,restoreSheet,METRICS,haGet:async p=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Koppel eerst Home Assistant (Gezondheid → Koppelen).');return ha(p)},pushState,load,sync,autoSync,view,todayCard,settingsCard,answer,insights,recovery,hrBlock,linkWorkout,exportData,importData,configured,
+window.HEALTH={haWS:async msg=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Niet gekoppeld met Home Assistant.');return wsRun(CFG,msg)},hasHA:()=>!!(CFG&&CFG.url&&CFG.token),range,haBackup,restoreSheet,METRICS,haGet:async p=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Koppel eerst Home Assistant (Gezondheid → Koppelen).');return ha(p)},pushState,load,sync,autoSync,view,todayCard,settingsCard,answer,insights,recovery,hrBlock,linkWorkout,exportData,importData,configured,
   _t:{normUrl,discover,score,addSamples,days,trend,conv,plausible,wWindow,hrFor,linkAll,setState:(c,h)=>{CFG={...emptyCfg(),...c};HD={...emptyHD(),...h}},get HD(){return HD},get CFG(){return CFG}}};
 })();

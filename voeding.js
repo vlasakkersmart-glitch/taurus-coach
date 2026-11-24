@@ -67,10 +67,18 @@ const DEF=()=>({v:1,people:{k:{excl:['kaas','geraspt','olijven','kiwi','amandel'
   p:{excl:['ei','ui','knoflook','aardappel','pasta','rijst','melk','whey','skyr'],gluten:true,kcal:1500,prot:110}},
  taste:{k:{ing:{},meal:{}},p:{ing:{},meal:{}}},base:null,over:{},shifts:[],shiftExtra:{},
  pp:{travel:30,eatLead:45,breakEvening:'19:30',breakNight:'02:00',wake:'',dinner:'18:00',winFrom:'17:00',winTo:'19:00',avond:['15:00','23:00'],nacht:['22:00','07:00']},
- roster:{src:'manual',entity:'calendar.werk',allShifts:true,kw:{avond:'avond',nacht:'nacht',dag:'dag'},consent:null,lastSync:null,err:''},ui:{seg:'week',wk:0,tp:'k'},abs:null,vary:true});
+ roster:{src:'manual',entity:'calendar.werk',allShifts:true,kw:{avond:'avond',nacht:'nacht',dag:'dag'},consent:null,lastSync:null,err:''},ui:{seg:'week',wk:0,tp:'k'},abs:null,vary:true,updated:0,
+ kroster:{entities:'calendar.kristiaan_indexpay_nl, calendar.indexpay_kristiaan',on:true,lastSync:null,err:'',events:[]},sync:{on:true,lastPull:null,lastPush:null,err:'',ro:false}});
 let F=DEF();
 async function load(){try{const v=await idbGet('family');if(v){const d=JSON.parse(v);F={...DEF(),...d,pp:{...DEF().pp,...(d.pp||{})},roster:{...DEF().roster,...(d.roster||{})},ui:{...DEF().ui,...(d.ui||{})}}}}catch(e){}if(!F.base)F.base=genBase();}
-let svT=null;function save(){clearTimeout(svT);svT=setTimeout(()=>idbSet('family',JSON.stringify(F)).catch(()=>{}),200)}
+let svT=null,pushT=null;function save(local){if(!local){F.updated=Date.now();clearTimeout(pushT);pushT=setTimeout(push,2500)}clearTimeout(svT);svT=setTimeout(()=>idbSet('family',JSON.stringify(F)).catch(()=>{}),200)}
+/* ---------- gedeeld gezinsschema via Home Assistant (systeemgegevens, alleen met token leesbaar) ---------- */
+const SHARED=['base','over','shifts','shiftExtra','pp','people','taste','roster','kroster','vary','updated'];
+async function push(){if(!F.sync.on||!window.HEALTH||!HEALTH.hasHA||!HEALTH.hasHA())return;try{const d={};SHARED.forEach(k=>d[k]=F[k]);d.by=(typeof S!=='undefined'&&S.profile&&S.profile.name)||'';
+  await HEALTH.haWS({type:'frontend/set_system_data',key:'taurus_family',value:JSON.stringify(d)});F.sync.lastPush=Date.now();F.sync.err='';F.sync.ro=false}catch(e){F.sync.err=e.message;if(/admin|unauthor|permission/i.test(e.message))F.sync.ro=true}save(true)}
+async function pull(){if(!F.sync.on||!window.HEALTH||!HEALTH.hasHA||!HEALTH.hasHA())return false;try{const r=await HEALTH.haWS({type:'frontend/get_system_data',key:'taurus_family'});F.sync.lastPull=Date.now();F.sync.err='';
+  if(r&&r.value){const d=JSON.parse(r.value);if((d.updated||0)>(F.updated||0)){SHARED.forEach(k=>{if(d[k]!==undefined)F[k]=d[k]});F.sync.from=d.by||'';save(true);return true}
+    else if((d.updated||0)<(F.updated||0))push()}else{if(!F.updated)F.updated=Date.now();push()}save(true);return false}catch(e){F.sync.err=e.message;save(true);return false}}
 function saveNow(){clearTimeout(svT);return idbSet('family',JSON.stringify(F)).catch(()=>{})}
 
 /* ---------- tijd (naïeve Amsterdam-lokale tekst, rekenen in minuten) ---------- */
@@ -143,13 +151,29 @@ function dayPlan(ds){const dow=dowOf(ds),pp=F.pp,dayAbs=absMin(ds+'T00:00');cons
     it.push({id:'p-nathuis-'+s.id,t:'nathuis',time:hm(en+20),meal:'p_nathuis',who:['p'],reason:[`Na de ${TL.nacht}, vóór het slapen`],src:'auto'});
     it.push({id:'p-wakker-'+s.id,t:'wakker',time:wake||null,meal:'p_wakker',who:['p'],reason:[wake?`Eerste maaltijd na het slapen, rond je wektijd ${wake}`:'Tijd open: wektijd na de nachtdienst nog onbekend'],src:'auto'});
     const ln=it.find(x=>x.id==='p-lunch');if(ln&&wake&&tm(ln.time)<tm(wake)+120){ln.time=hm(tm(wake)+150);ln.reason.push('Later gezet: na je wektijd');ln.src='auto'}}
+  /* Kristiaan: op pad = lunch mee; 'Kristiaan thuis' = avondeten na thuiskomst */
+  const K=F.kroster||{};const kev=(K.events||[]).filter(e=>e.start.slice(0,10)===ds);const kNotes=[];
+  if(K.on&&K.lastSync){const outs=kev.filter(e=>e.kind==='out');const kl=it.find(x=>x.id==='k-lunch');const places=[...new Set(outs.map(e=>e.place))];
+    if(outs.length){kNotes.push('op pad: '+places.join(', '));if(kl){kl.mee={...kl.mee,k:true};kl.reason.push('Op pad ('+places.join(', ')+'): lunch mee');kl.src='auto'}}
+    else if(dow<5&&kl&&kl.mee&&kl.mee.k){kl.mee={...kl.mee,k:false};kl.reason.push('Geen afspraken buiten de deur: lunch thuis');kl.src='auto'}
+    const home=kev.filter(e=>e.kind==='home').pop();const din=it.find(x=>x.id==='diner');
+    if(home&&din&&din.who.includes('k')){const ht=tm(home.start.slice(11))+15;kNotes.push('thuis rond '+home.start.slice(11));
+      if(tm(din.time)<ht){if(din.src==='auto'&&din.who.includes('p')){din.who=din.who.filter(w=>w!=='k');it.push({id:'k-diner',t:'diner',time:hm(ht),meal:din.meal,who:['k'],reason:['Patricia eet eerder (dienst); jij bent pas om '+home.start.slice(11)+' thuis: eigen bord'],src:'auto'})}
+        else{din.reason.push('Kristiaan is om '+home.start.slice(11)+' thuis; verschoven van '+din.time);din.time=hm(ht);din.src='auto'}}}}
   const ov=F.over[ds]||{};for(const id in ov){const o=ov[id];const i=it.findIndex(x=>x.id===id);
     if(o.deleted){if(i>=0)it.splice(i,1);continue}
     const v={...(i>=0?it[i]:{}),...o,reason:[o.pinned?'Vastgezet':'Aangepast voor deze dag'],src:o.pinned?'vast':'dag'};if(i>=0)it[i]=v;else it.push(v)}
   it.sort((a,b)=>(a.time?tm(a.time)+(a.at&&a.at.slice(0,10)>ds?1440:0):2000)-(b.time?tm(b.time)+(b.at&&b.at.slice(0,10)>ds?1440:0):2000));
-  return{date:ds,dow,trainDay,items:it,shifts:notes,ending:ending.map(s=>s.id)}}
+  return{date:ds,dow,trainDay,items:it,shifts:notes,ending:ending.map(s=>s.id),kNotes}}
 function kcalDay(p){let k=0,unk=0;p.items.filter(x=>x.who.includes('k')).forEach(x=>{const m=M[x.meal];if(x.ingK||!m||!m.kk)unk++;else k+=m.kk});return{k,unk}}
 
+/* ---------- agenda Kristiaan: op pad / thuis ---------- */
+function kKind(t){t=t||'';if(/kristiaan thuis|\bthuis\b/i.test(t)&&t.length<30)return['home',''];if(/niet eerder weg/i.test(t))return['notbefore',''];const m=t.match(/^([A-Za-zÀ-ÿ'\- ]{2,30}):\s/);if(m)return['out',m[1].trim()];return[null,'']}
+async function syncK(){const K=F.kroster;if(!K.on)return{skip:true};if(!window.HEALTH||!HEALTH.haGet)return{err:'Koppel eerst Home Assistant.'};
+  const from=new Date(Date.now()-864e5),to=new Date(Date.now()+28*864e5);const ents=(K.entities||'').split(',').map(x=>x.trim()).filter(Boolean);const ev=[];
+  try{for(const ent of ents){const r=await HEALTH.haGet(`/api/calendars/${encodeURIComponent(ent)}?start=${encodeURIComponent(from.toISOString())}&end=${encodeURIComponent(to.toISOString())}`);
+      for(const e of r||[]){if(!e.start||!e.start.dateTime)continue;const [kind,place]=kKind(e.summary);if(!kind)continue;ev.push({start:ams(new Date(e.start.dateTime)),end:ams(new Date(e.end.dateTime)),kind,place})}}
+    K.events=ev.sort((a,b)=>a.start.localeCompare(b.start));K.lastSync=Date.now();K.err='';save();return{ok:true,n:ev.length}}catch(e){K.err=e.message;save(true);return{err:e.message}}}
 /* ---------- agenda via Home Assistant ---------- */
 /* Type van een dienst: eerst op naam; staan alle diensten als 'Werken' in de agenda, dan op begintijd (Amsterdam-tijd). */
 function typeByTime(start,end){const h=tm(start.slice(11))/60;const over=end&&end.slice(0,10)>start.slice(0,10);if(h>=20||(over&&h>=18)||h<4)return'nacht';if(h>=12)return'avond';return'dag'}
@@ -181,7 +205,7 @@ function rosterBanner(mon){const R=F.roster;const sun=addDays(mon,6);const n=shi
 function vWeek(){const mon=addDays(monday(today()),F.ui.wk*7);let h=`<div class="row sp" style="margin:0 2px 10px"><button class="ibtn" data-a="v_wk" data-k="-1">‹</button><b>Week van ${fmtD(mon)}</b><button class="ibtn" data-a="v_wk" data-k="1">›</button></div>`+rosterBanner(mon);
   for(let d=0;d<7;d++){const ds=addDays(mon,d);const p=dayPlan(ds);const kc=kcalDay(p);const isT=ds===today();
     h+=`<div class="card" ${isT?'style="border-color:rgba(165,180,252,.6)"':''}><div class="row sp"><div><b>${DN[d]} ${fmtD(ds)}</b>${isT?' <span class="chip on" style="padding:1px 7px">vandaag</span>':''}</div><span class="tiny mut">${p.trainDay?'trainingsdag K':'rustdag K'}</span></div>
-     ${p.shifts.map(x=>`<div class="chip" style="margin-top:6px;border-color:rgba(249,168,212,.45);color:#f9a8d4">Patricia: ${E(x.lab)}${x.s.src==='ha'?' · agenda':''}</div>`).join(' ')}${p.ending.length?'<div class="chip" style="margin-top:6px">Patricia: na nachtdienst</div>':''}
+     ${p.shifts.map(x=>`<div class="chip" style="margin-top:6px;border-color:rgba(249,168,212,.45);color:#f9a8d4">Patricia: ${E(x.lab)}${x.s.src==='ha'?' · agenda':''}</div>`).join(' ')}${p.ending.length?'<div class="chip" style="margin-top:6px">Patricia: na nachtdienst</div>':''}${(p.kNotes||[]).map(n=>`<div class="chip" style="margin-top:6px;border-color:rgba(165,180,252,.5);color:#c7d2fe">Kristiaan: ${E(n)}</div>`).join(' ')}
      <div class="list" style="margin-top:6px">${p.items.map(x=>`<div class="li" data-a="v_edit" data-d="${ds}" data-k="${E(x.id)}" style="align-items:flex-start"><div style="min-width:46px;font-weight:700;${x.time?'':'color:var(--warn)'}">${x.time||'open'}${x.at&&x.at.slice(0,10)>ds?'<div class="tiny mut">'+DS[(d+1)%7]+'</div>':''}</div>
        <div class="grow"><div class="tiny mut">${SLOT[x.t]||''}${x.gezin?' · gezin':''}</div><div>${E(M[x.meal]?M[x.meal].n:x.meal)} ${x.src==='vast'?'📌':''}</div>
        <div class="row wrap" style="gap:4px;margin-top:3px">${chipW(x.who)}${x.mee&&(x.mee.k||x.mee.p)?`<span class="chip warn" style="padding:2px 7px">mee naar werk${x.who.length>1?': '+['k','p'].filter(w=>x.mee[w]).map(w=>PN[w]).join(', '):''}</span>`:''}</div>
@@ -213,6 +237,15 @@ function vRooster(){const pp=F.pp,R=F.roster;const up=shiftsAll().filter(s=>s.en
    <label class="row" style="gap:8px;margin-top:10px;align-items:flex-start"><input type="checkbox" id="v_cons" ${R.consent?'checked':''} style="margin-top:3px"><span class="small">Patricia vindt het goed dat de app haar werkafspraken uit deze agenda leest. Alleen titel, begin en eind van diensten worden op dit apparaat bewaard.</span></label>
    <div class="row" style="gap:8px;margin-top:10px"><button class="btn pri grow" data-a="v_calsave">Opslaan en ophalen</button>${R.src==='ha'?'<button class="btn" data-a="v_sync">Nu ophalen</button>':''}</div>
    <div class="tiny mut" style="margin-top:6px">${R.lastSync?'Laatste geslaagde synchronisatie: '+new Date(R.lastSync).toLocaleString('nl-NL')+(R.lastChanges?` (nieuw ${R.lastChanges.nieuw}, gewijzigd ${R.lastChanges.gewijzigd}, vervallen ${R.lastChanges.vervallen})`:''):'Nog niet gesynchroniseerd.'}${R.err?' · fout: '+E(R.err):''}</div></div>
+  <div class="card"><h2>Agenda Kristiaan</h2><div class="small mut">Afspraken als "Horst: …" = op pad (lunch mee). "Kristiaan thuis" = avondeten na thuiskomst. Alleen tijd, soort en plaats worden bewaard, geen klantnamen.</div>
+   <label class="lb">Agenda's (entity, komma-gescheiden)</label><input class="f" id="v_kent" value="${E(F.kroster.entities)}" autocapitalize="off">
+   <label class="row sp" style="margin-top:8px"><span>Gebruiken voor mijn eettijden</span><input type="checkbox" id="v_kon" ${F.kroster.on?'checked':''}></label>
+   <button class="btn sm" style="margin-top:8px" data-a="v_ksync">Opslaan en ophalen</button>
+   <div class="tiny mut" style="margin-top:6px">${F.kroster.lastSync?'Laatst opgehaald: '+new Date(F.kroster.lastSync).toLocaleString('nl-NL')+' · '+F.kroster.events.length+' momenten':'Nog niet opgehaald.'}${F.kroster.err?' · fout: '+E(F.kroster.err):''}</div></div>
+  <div class="card"><h2>Gedeeld met Patricia</h2><div class="small mut">Het weekschema, de diensten en de smaak staan ook in jullie Home Assistant, zodat jullie op beide telefoons hetzelfde zien. Wie het laatst iets wijzigt, bepaalt de stand.</div>
+   <label class="row sp" style="margin-top:8px"><span>Delen via Home Assistant</span><input type="checkbox" id="v_son" ${F.sync.on?'checked':''}></label>
+   <div class="tiny mut" style="margin-top:6px">${F.sync.lastPush?'Laatst gedeeld: '+new Date(F.sync.lastPush).toLocaleString('nl-NL'):''}${F.sync.lastPull?' · laatst opgehaald: '+new Date(F.sync.lastPull).toLocaleString('nl-NL'):''}${F.sync.from?' · laatste wijziging door '+E(F.sync.from):''}${F.sync.ro?' · alleen-lezen (geen beheerdersrechten in HA)':''}${F.sync.err&&!F.sync.ro?' · fout: '+E(F.sync.err):''}</div>
+   <button class="btn sm" style="margin-top:8px" data-a="v_spull">Nu ophalen</button></div>
   <div class="card"><h2>Voorkeuren Patricia</h2><div class="grid2">
    ${[['travel','Reistijd naar werk (min)','number'],['eatLead','Eten vóór vertrek (min)','number'],['breakEvening','Pauze avonddienst','time'],['breakNight','Pauze nachtdienst','time'],['wake','Wektijd na nachtdienst','time']].map(([k,l,t])=>`<div><label class="lb">${l}</label><input class="f" type="${t}" data-vp="${k}" value="${E(pp[k])}"></div>`).join('')}</div>
    <div class="tiny mut" style="margin-top:6px">Laat de wektijd leeg als die wisselt; dan blijft de eerste maaltijd na het slapen 'open'. Per dienst kun je ook een eigen wektijd en pauze zetten.</div></div>
@@ -226,7 +259,7 @@ function adjustCard(){try{if(!window.HEALTH||!HEALTH.configured()||!HEALTH._t.tr
   const s=t.slope;const adv=s<0.1?150:s>0.35?-150:0;const txt=`Gewicht 2 weken: ${s>=0?'+':''}${s.toFixed(2).replace('.',',')} kg/week (berekend). `+(adv>0?'Schema: +150 kcal per dag (als je kracht ook niet stijgt).':adv<0?'Schema: −150 kcal per dag (als je taille ook snel stijgt).':'Binnen +0,1 tot +0,35 kg/week: niets veranderen.');
   return`<div class="card" style="margin:10px 0 0;background:rgba(255,255,255,.05)"><div class="small"><span class="chip acc">suggestie</span> ${E(txt)}</div>${adv?`<button class="btn sm" style="margin-top:8px" data-a="v_adj" data-k="${adv}">Toepassen (${adv>0?'+':''}${adv} kcal)</button>`:''}</div>`}catch(e){return''}}
 function view(){const seg=F.ui.seg;return`<div class="hdr"><div><div class="sub">Gezin · glutenvrij waar nodig</div><h1>Voeding</h1></div><button class="ibtn" data-a="home" aria-label="Start">${IC.home}</button></div>
-  <div class="seg" style="margin-bottom:12px">${[['week','Week'],['smaak','Smaak'],['rooster','Diensten']].map(([k,l])=>`<button class="${seg===k?'on':''}" data-a="v_seg" data-k="${k}">${l}</button>`).join('')}</div>`+(seg==='smaak'?vSmaak():seg==='rooster'?vRooster():vWeek())+
+  <div class="seg" style="margin-bottom:12px">${[['week','Week'],['smaak','Smaak'],['rooster','Diensten & agenda']].map(([k,l])=>`<button class="${seg===k?'on':''}" data-a="v_seg" data-k="${k}">${l}</button>`).join('')}</div>`+(seg==='smaak'?vSmaak():seg==='rooster'?vRooster():vWeek())+
   `<div class="tiny mut" style="margin:6px 2px 20px">Basis: jouw spiermassaschema en Patricia's weekmenu. Voedingswaarden alleen waar het schema ze noemt; geen medisch dieetadvies.</div>`}
 /* bewerken */
 let ED=null;
@@ -291,15 +324,21 @@ document.addEventListener('click',async ev=>{const t=ev.target.closest('[data-a^
   else if(a==='s_save')saveShift();
   else if(a==='s_del'){if(!confirm('Deze dienst verwijderen? De maaltijden worden opnieuw berekend.'))return;F.shifts=F.shifts.filter(x=>x.id!==SH.id);save();closeSheet();render()}
   else if(a==='v_cals'){const m=document.getElementById('v_calmsg');try{if(!HEALTH.haGet)throw new Error('Koppel eerst Home Assistant via Gezondheid.');m.textContent='Zoeken…';const cs=await HEALTH.haGet('/api/calendars');m.innerHTML='Gevonden: '+cs.map(c=>`<button class="chip" style="margin:3px" data-a="v_pickcal" data-k="${E(c.entity_id)}">${E(c.name||c.entity_id)}</button>`).join('')+'<div class="tiny mut">Staat haar werkagenda er niet tussen? Voeg die eerst toe in Home Assistant.</div>'}catch(e){m.textContent=e.message}}
+  else if(a==='v_ksync'){F.kroster.entities=document.getElementById('v_kent').value;F.kroster.on=document.getElementById('v_kon').checked;save();toast('Ophalen…');const r=await syncK();toast(r.err?'Mislukt: '+r.err:r.skip?'Uitgeschakeld.':r.n+' momenten uit je agenda.',4000);render()}
+  else if(a==='v_spull'){const ch=await pull();toast(ch?'Bijgewerkt met de nieuwste stand.':F.sync.err?'Mislukt: '+F.sync.err:'Je hebt al de nieuwste stand.',4000);render()}
   else if(a==='v_pickcal'){document.getElementById('v_ent').value=k}
   else if(a==='v_calsave'||a==='v_sync'){const g=id=>document.getElementById(id);if(g('v_ent')){F.roster.entity=g('v_ent').value.trim();F.roster.kw={avond:g('v_kwa').value,nacht:g('v_kwn').value,dag:g('v_kwd').value};F.roster.allShifts=g('v_all').checked;F.roster.consent=g('v_cons').checked?(F.roster.consent||new Date().toISOString()):null}
     F.roster.src='ha';save();toast('Ophalen…');const r=await syncCal();toast(r.err?'Mislukt: '+r.err:`${r.n} diensten gevonden (nieuw ${r.changes.nieuw}, gewijzigd ${r.changes.gewijzigd}, vervallen ${r.changes.vervallen}).`,5000);render()}});
 document.addEventListener('change',ev=>{const t=ev.target;if(t.dataset.vp!=null){F.pp[t.dataset.vp]=t.type==='number'?+t.value:t.value;if(t.dataset.vp==='dinner')F.base.forEach(d=>d.forEach(x=>{if(x.id==='diner')x.time=t.value}));save();render()}
   else if(t.dataset.vk!=null){F.people.k[t.dataset.vk]=+t.value;save()}
+  else if(t.id==='v_son'){F.sync.on=t.checked;save(true);if(t.checked)pull().then(()=>render())}
   else if(t.dataset.vf==='vary'){F.vary=t.checked;save();render()}
   else if(t.dataset.vf==='gluten'){F.people.p.gluten=t.checked;save();render()}});
-async function autoSync(){if(F.roster.src==='ha'&&F.roster.consent&&(!F.roster.lastSync||Date.now()-F.roster.lastSync>30*6e4)){const r=await syncCal();if(r.ok&&typeof S!=='undefined'&&S.ui.tab==='voeding')render()}}
+async function autoSync(){let ch=false;try{ch=await pull()}catch(e){}
+  if(F.roster.src==='ha'&&F.roster.consent&&(!F.roster.lastSync||Date.now()-F.roster.lastSync>30*6e4)){const r=await syncCal();ch=ch||r.ok}
+  if(F.kroster.on&&(!F.kroster.lastSync||Date.now()-F.kroster.lastSync>30*6e4)){const r=await syncK();ch=ch||r.ok}
+  if(ch&&typeof S!=='undefined'&&['voeding','home'].includes(S.ui.tab))render()}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoSync()});
 function todayCard(){const p=dayPlan(today());const now=tm(ams(new Date()).slice(11));const nx=p.items.find(x=>x.time&&tm(x.time)>=now-15);if(!nx)return'';return`<div class="small mut">Volgende maaltijd</div><b>${nx.time} · ${E(M[nx.meal]?M[nx.meal].n:'')}</b>`}
-window.VOED={load,view,dayPlan,genBase,syncCal,autoSync,todayCard,get F(){return F},set F(v){F=v},M,ING,exportData:()=>F,importData:d=>{if(d&&d.base){F={...DEF(),...d};saveNow()}},saveNow,_t:{absMin,fromAbs,addDays,dowOf,monday,classify,allowed,variant,today,ams}};
+window.VOED={pull,push,syncK,load,view,dayPlan,genBase,syncCal,autoSync,todayCard,get F(){return F},set F(v){F=v},M,ING,exportData:()=>F,importData:d=>{if(d&&d.base){F={...DEF(),...d};saveNow()}},saveNow,_t:{kKind,absMin,fromAbs,addDays,dowOf,monday,classify,allowed,variant,today,ams}};
 })();
