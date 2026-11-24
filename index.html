@@ -1168,7 +1168,7 @@ function vCoach(){const k=S.ui.planKey||'A',P=S.plans[k];const items=buildItems(
   <div class="card"><h2>Hoe Sophie adviseert</h2><div class="small">Double progression: haal je bij alle werksets de bovenkant van de herhalingsreeks (met ≥1 RIR), dan adviseert ze de volgende stap van ${kg(S.profile.step)} kg. Twee keer onder de onderkant: iets lichter. Bij matig herstel (check-in) geen verhoging en een set minder. Na 3 trainingen zonder vooruitgang meldt ze stagnatie. Echte, geregistreerde trainingen gaan altijd voor op referentiegegevens.</div></div>`}
 
 /* ---- Instellingen ---- */
-const APPV='3.8.4';
+const APPV='3.8.5';
 async function forceUpdate(){if(S.active){toast('Eerst je training afronden.');return}toast('App wordt opnieuw geladen…',3000);try{const rs=await navigator.serviceWorker.getRegistrations();for(const r of rs)await r.unregister();for(const k of await caches.keys())await caches.delete(k)}catch(e){}location.replace(location.pathname+'?u='+Date.now())}
 function vSettings(){const p=S.profile;const f=(k,l,t='text',x='')=>`<div><label class="lb">${l}</label><input class="f" type="${t}" ${t==='number'?'inputmode="decimal" step="any"':''} data-f="prof" data-k="${k}" value="${esc(p[k])}" ${x}></div>`;
   return`<div class="hdr"><button class="ibtn" data-a="tab" data-k="vandaag">${IC.back}</button><h1 style="font-size:22px">Instellingen <span class="tiny mut" style="font-weight:400">v${APPV}</span></h1><button class="btn sm" data-a="forceupd">App bijwerken</button><span style="width:40px"></span></div>
