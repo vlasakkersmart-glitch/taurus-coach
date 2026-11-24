@@ -71,7 +71,7 @@ const DEF=()=>({v:1,people:{k:{excl:['kaas','geraspt','olijven','kiwi','amandel'
  kroster:{entities:'calendar.kristiaan_indexpay_nl, calendar.indexpay_kristiaan',on:true,lastSync:null,err:'',events:[]},sync:{on:true,lastPull:null,lastPush:null,err:'',ro:false}});
 let F=DEF();
 async function load(){try{const v=await idbGet('family');if(v){const d=JSON.parse(v);F={...DEF(),...d,pp:{...DEF().pp,...(d.pp||{})},roster:{...DEF().roster,...(d.roster||{})},ui:{...DEF().ui,...(d.ui||{})}}}}catch(e){}if(!F.base)F.base=genBase();}
-let svT=null,pushT=null;function save(local){if(!local){F.updated=Date.now();clearTimeout(pushT);pushT=setTimeout(push,2500)}clearTimeout(svT);svT=setTimeout(()=>idbSet('family',JSON.stringify(F)).catch(()=>{}),200)}
+let svT=null,pushT=null;function save(local){window._dirtyAt=Date.now();if(!local){F.updated=Date.now();clearTimeout(pushT);pushT=setTimeout(push,2500)}clearTimeout(svT);svT=setTimeout(()=>idbSet('family',JSON.stringify(F)).catch(()=>{}),200)}
 /* ---------- gedeeld gezinsschema via Home Assistant (systeemgegevens, alleen met token leesbaar) ---------- */
 const SHARED=['base','over','shifts','shiftExtra','pp','people','taste','roster','kroster','vary','updated'];
 async function push(){if(!F.sync.on||!window.HEALTH||!HEALTH.hasHA||!HEALTH.hasHA())return;try{const d={};SHARED.forEach(k=>d[k]=F[k]);d.by=(typeof S!=='undefined'&&S.profile&&S.profile.name)||'';

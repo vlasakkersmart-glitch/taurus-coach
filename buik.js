@@ -20,7 +20,7 @@ const PLAN={A:{n:'Training A',sub:'±12 min · goed vóór een nachtdienst (over
 const PEOPLE={k:'Kristiaan',p:'Patricia'};
 let A={who:'p',p:{},k:{},view:'home',plan:null,ex:null,run:null};
 async function load(){try{const v=await idbGet('abs');if(v)A={...A,...JSON.parse(v),view:'home',run:null}}catch(e){}}
-function save(){const{run,...r}=A;idbSet('abs',JSON.stringify(r)).catch(()=>{})}
+function save(){window._dirtyAt=Date.now();const{run,...r}=A;idbSet('abs',JSON.stringify(r)).catch(()=>{})}
 const me=()=>A[A.who]||(A[A.who]={});
 const st=id=>me()[id]||(me()[id]={target:null,step:null,hist:[]});
 const unit=id=>EX[id].m==='sec'?'sec':'herh.';const perSide=id=>EX[id].side?' per kant':'';

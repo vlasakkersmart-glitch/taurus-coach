@@ -249,16 +249,19 @@ function todayCard(){if(!configured())return'';const r=recovery();const w=latest
   ${readiness()?readyCard(false):r.level?`<div class="small" style="margin-top:6px">${KCH.suggestie} ${E(r.sum)}</div>`:''}
   <button class="btn sm" style="margin-top:8px" data-a="tab" data-k="gezondheid">Bekijk details</button></div>`}
 function settingsCard(){return`<div class="card"><div class="row sp"><h2 style="margin:0">Back-up in Home Assistant</h2><span class="small ${CFG&&CFG.haBackupOk&&!CFG.haBackupErr?'':'mut'}">${CFG&&CFG.haBackup?(CFG.haBackupOk?'✓ '+ago(CFG.haBackupOk):'nog niet gelukt'):'uit'}</span></div>
-  <div class="tiny mut" style="margin:6px 0 8px">${CFG&&CFG.haBackup?'Na elke training gaat er automatisch een back-up naar je eigen Home Assistant.'+(CFG.haBackupErr?' Laatste poging mislukt: '+E(CFG.haBackupErr):''):'Zet aan via "Koppeling beheren". Dan ben je niet meer afhankelijk van iCloud.'}</div>${CFG&&CFG.haBackup?'<button class="btn sm" data-a="h_bknow">Nu back-up maken</button>':''}</div>
-  <div class="card"><div class="row sp"><h2 style="margin:0">Gezondheid (Home Assistant)</h2>${statusLine()}</div><div class="tiny mut" style="margin:6px 0 8px">FITAGE-weegschaal en Apple Watch via je eigen Home Assistant. Token staat alleen op dit apparaat en gaat niet mee in back-ups.</div><button class="btn full" data-a="h_setup">${CFG&&CFG.url?'Koppeling beheren':'Koppelen'}</button></div>`}
+  <div class="tiny mut" style="margin:6px 0 8px">${CFG&&CFG.haBackup?'Automatisch: na elke training, als je de app wegklikt nadat er iets is veranderd, en elke dag bij openen. De vorige versie wordt ook bewaard.'+(CFG.haBackupErr?' Laatste poging mislukt: '+E(CFG.haBackupErr):''):'Zet aan via "Koppeling beheren". Dan ben je niet meer afhankelijk van iCloud.'}</div>${CFG&&CFG.haBackup?'<button class="btn sm" data-a="h_bknow">Nu back-up maken</button>':''}</div>
+  <div class="card"><div class="row sp"><h2 style="margin:0">Gezondheid (Home Assistant)</h2>${statusLine()}</div><div class="tiny mut" style="margin:6px 0 8px">FITAGE-weegschaal en Apple Watch via je eigen Home Assistant. Token staat alleen op dit apparaat en gaat niet mee in back-ups.</div><button class="btn full" data-a="h_setup">${CFG&&CFG.url?'Koppeling beheren':'Koppelen'}</button>${CFG&&CFG.url&&CFG.token?'<button class="btn full" style="margin-top:8px" data-a="h_pair">📱 Tweede telefoon koppelen</button>':''}</div>`}
 
 let DRAFT=null;
+function pairSheet(code){sheet(`<h2>Tweede telefoon koppelen</h2>${code?`<div class="small">Stuur deze code naar de andere telefoon (AirDrop of via Notities) en plak hem daar bij <b>Gezondheid → Koppelen → Koppelcode</b>.</div><textarea class="f" id="h_pc" readonly style="min-height:90px;font-size:12px;margin-top:8px">${E(code)}</textarea><div class="row" style="gap:8px;margin-top:8px"><button class="btn pri grow" data-a="h_pcopy">Kopiëren</button>${navigator.share?'<button class="btn grow" data-a="h_pshare">Delen (AirDrop)</button>':''}</div><div class="banner warn" style="margin-top:10px">Deze code is een sleutel tot je Home Assistant. Stuur hem niet via WhatsApp of mail, en gooi het bericht weg na het plakken. Intrekken kan altijd in Home Assistant → je profiel → Beveiliging → token "Taurus Coach – tweede telefoon".</div>`:`<div class="small">De app maakt in jouw Home Assistant een aparte sleutel (token) voor de andere telefoon en zet die met het adres in één koppelcode. Jij hoeft niets over te typen.</div><div class="tiny mut" style="margin-top:6px">Op de andere telefoon moet Tailscale aan staan (met hetzelfde account), anders kan hij niet bij je Home Assistant.</div><div id="h_pst" class="small" style="margin-top:8px"></div><button class="btn pri full" style="margin-top:12px" data-a="h_pairgo">Maak koppelcode</button>`}`)}
+async function pairGo(){const el=document.getElementById('h_pst');try{const t=await wsRun(CFG,{type:'auth/long_lived_access_token',client_name:'Taurus Coach – tweede telefoon '+new Date().toLocaleDateString('nl-NL'),lifespan:3650});if(typeof t!=='string'||t.length<20)throw new Error('geen token ontvangen');pairSheet(encodePair(CFG.url,t))}catch(e){if(el)el.textContent='Lukt niet: '+e.message}}
 function setupSheet(){DRAFT=DRAFT||{...emptyCfg(),...CFG,map:{...CFG.map},units:{...CFG.units}};const c=DRAFT;const origin=location.origin;
   const cand=c.cands;
   sheet(`<h2>Home Assistant koppelen</h2>
   <div class="small mut">Je hebt nodig: (1) het externe <b>https</b>-adres van je Home Assistant, (2) een langlevend toegangstoken (HA → je profiel → Beveiliging → Langlevende toegangstokens), (3) deze regel in <code>configuration.yaml</code> en daarna HA herstarten:</div>
   <textarea class="f" readonly style="min-height:70px;font-size:12px;margin-top:6px" id="h_yaml">http:\n  cors_allowed_origins:\n    - ${E(origin)}</textarea>
   <div class="small mut" style="margin-top:6px">Voor Apple Watch-gegevens: HA Companion-app → Instellingen → Companion-app → Sensoren → Apple Health-sensoren aanzetten en toestemming geven in iOS.</div>
+  <div class="card" style="margin:10px 0;border-color:rgba(165,180,252,.45)"><b>Koppelcode van een andere telefoon?</b><div class="tiny mut" style="margin:4px 0 6px">Heeft iemand thuis de app al gekoppeld? Laat diegene bij Gezondheid op <b>Tweede telefoon koppelen</b> tikken en plak de code hier. Dan hoef je hieronder niets in te vullen.</div><input class="f" id="h_code" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="TCK1.…"></div>
   <label class="lb">URL van Home Assistant</label><input class="f" id="h_url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://xxxx.ui.nabu.casa" value="${E(c.url)}">
   <label class="lb">Toegangstoken</label><input class="f" id="h_tok" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${c.token?'•••••• (opgeslagen, laat leeg om te behouden)':'plak je token'}">
   <label class="row" style="gap:8px;margin-top:12px;align-items:flex-start"><input type="checkbox" id="h_cons" ${c.consent?'checked':''} style="margin-top:3px"><span class="small">Ik geef toestemming om mijn gezondheidsgegevens (gewicht en lichaamssamenstelling, hartslag, rusthartslag, HRV, slaap, stappen, actieve energie) uit mijn Home Assistant op te halen. Ze worden alleen op dit apparaat opgeslagen.</span></label>
@@ -281,8 +284,10 @@ function setupSheet(){DRAFT=DRAFT||{...emptyCfg(),...CFG,map:{...CFG.map},units:
   ${!cand&&CFG.url?'<button class="btn pri full" style="margin-top:12px" data-a="h_save">Opslaan</button>':''}
   ${CFG.url?`<div class="grid2" style="margin-top:16px"><button class="btn" data-a="h_unlink">Koppeling verwijderen</button><button class="btn" data-a="h_wipe" style="color:var(--bad)">Gezondheidsdata wissen</button></div>`:''}
   <button class="btn full" style="margin-top:10px" data-a="h_close">Sluiten</button>`)}
-function readForm(){const c=DRAFT;const u=document.getElementById('h_url');const tk=document.getElementById('h_tok');const cs=document.getElementById('h_cons');
-  const rm=document.getElementById('h_rem');if(rm)c.remind=rm.checked;const bk=document.getElementById('h_bk');if(bk)c.haBackup=bk.checked;const w0=document.getElementById('h_wr0'),w1=document.getElementById('h_wr1');if(w0&&w1&&+w0.value<+w1.value)c.wr=[+w0.value,+w1.value];if(u)c.url=u.value.trim();if(tk&&tk.value.trim())c.token=tk.value.trim();if(cs)c.consent=cs.checked?(c.consent||new Date().toISOString()):null;
+function decodePair(v){try{const m=/TCK1\.([A-Za-z0-9_-]+)/.exec(v||'');if(!m)return null;const j=JSON.parse(decodeURIComponent(escape(atob(m[1].replace(/-/g,'+').replace(/_/g,'/')))));return j&&j.u&&j.t?j:null}catch(e){return null}}
+function encodePair(u,t){return'TCK1.'+btoa(unescape(encodeURIComponent(JSON.stringify({u,t})))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function readForm(){const c=DRAFT;const pc=document.getElementById('h_code');const pj=pc&&decodePair(pc.value);if(pj){c.url=pj.u;c.token=pj.t;c.haBackup=true;const u0=document.getElementById('h_url');if(u0)u0.value=pj.u}const u=document.getElementById('h_url');const tk=document.getElementById('h_tok');const cs=document.getElementById('h_cons');
+  const rm=document.getElementById('h_rem');if(rm)c.remind=rm.checked;const bk=document.getElementById('h_bk');if(bk)c.haBackup=bk.checked;const w0=document.getElementById('h_wr0'),w1=document.getElementById('h_wr1');if(w0&&w1&&+w0.value<+w1.value)c.wr=[+w0.value,+w1.value];if(u&&!pj)c.url=u.value.trim();if(tk&&tk.value.trim())c.token=tk.value.trim();if(cs)c.consent=cs.checked?(c.consent||new Date().toISOString()):null;
   document.querySelectorAll('.h_map').forEach(s=>{c.map[s.dataset.m]=s.value||null;const o=(c.cands&&c.cands[s.dataset.m]||[]).find(x=>x.id===s.value);if(o)c.units[s.dataset.m]=o.unit})}
 const msg=(t,bad)=>{const el=document.getElementById('h_msg');if(el){el.innerHTML=t;el.style.color=bad?'var(--bad)':''}};
 async function doTest(){readForm();const c=DRAFT;try{c.url=normUrl(c.url)}catch(e){return msg(E(e.message),1)}
@@ -299,6 +304,9 @@ document.addEventListener('click',async ev=>{const t=ev.target.closest('[data-a^
   else if(a==='h_close'){DRAFT=null;closeSheet()}
   else if(a==='h_test')doTest();
   else if(a==='h_save')doSave();
+  else if(a==='h_pair')pairSheet();else if(a==='h_pairgo')pairGo();
+  else if(a==='h_pcopy'){const ta=document.getElementById('h_pc');try{await navigator.clipboard.writeText(ta.value);toast('Gekopieerd.')}catch(e){ta.select();document.execCommand('copy');toast('Gekopieerd.')}}
+  else if(a==='h_pshare'){try{await navigator.share({text:document.getElementById('h_pc').value})}catch(e){}}
   else if(a==='h_manadd'){readForm();const id=(document.getElementById('h_man').value||'').trim();const m=document.getElementById('h_manm').value;if(!/^[a-z_]+\.[a-z0-9_]+$/.test(id))return msg('Ongeldige entity_id.',1);DRAFT.map[m]=id;setupSheet();msg('Toegevoegd; eenheid wordt bij opslaan overgenomen zoals HA hem meldt.')}
   else if(a==='h_per'){S.ui.hp=t.dataset.k;save();render()}
   else if(a==='h_sync'){const r=await sync();toast(r.err?'Mislukt: '+r.err:r.skip?'Bezig…':`${r.added} nieuwe metingen.`,4000);render()}
@@ -332,7 +340,8 @@ async function pushState(){if(!CFG||!CFG.url||!CFG.token||!CFG.remind||typeof co
   try{const c=coachState();await ha('/api/states/sensor.taurus_coach',CFG,{state:c.state,attributes:{friendly_name:'Taurus Coach',icon:'mdi:dumbbell',last_workout:c.last_workout,week_done:c.week_done,week_goal:c.week_goal,next_plan:c.next_plan,next_minutes:c.next_minutes,due:c.due,message:c.message,updated:new Date().toISOString()}});CFG.remindOk=Date.now();saveCfg()}catch(e){CFG.remindErr=e.message;saveCfg()}}
 /* ---------- back-up in Home Assistant (blijft thuis, versleuteld verkeer, alleen met jouw token leesbaar) ----------
    Opslag: HA 'frontend user data' van de HA-gebruiker van het token (bewaard in HA's .storage, overleeft herstarts). */
-function wsRun(c,msg){return new Promise((res,rej)=>{let ws,done=false;const fin=(f,v)=>{if(done)return;done=true;clearTimeout(to);try{ws.close()}catch(e){}f(v)};
+let wsImpl=null;
+function wsRun(c,msg){if(wsImpl)return wsImpl(c,msg);return new Promise((res,rej)=>{let ws,done=false;const fin=(f,v)=>{if(done)return;done=true;clearTimeout(to);try{ws.close()}catch(e){}f(v)};
   const to=setTimeout(()=>fin(rej,new Error('Home Assistant reageert niet (time-out).')),25000);
   try{ws=new WebSocket(c.url.replace(/^https:/,'wss:')+'/api/websocket')}catch(e){return fin(rej,e)}
   ws.onerror=()=>fin(rej,new Error('Geen verbinding met Home Assistant.'));
@@ -345,16 +354,23 @@ const slug=x=>(x||'profiel').toLowerCase().normalize('NFD').replace(/[\u0300-\u0
 function backupPayload(){return{...S,photos:[],active:null,type:'taurus-backup',exported:(typeof localISO==='function'?localISO():new Date().toISOString()),via:'homeassistant',
   family:window.VOED?VOED.exportData():null,abs:window.BUIK?BUIK.exportData():null}}
 let bkBusy=false;
+/* automatische back-up: bij het wegleggen van de app (als er iets veranderd is), elk half uur zolang hij open staat, na elke training en bij openen als de laatste >20 u oud is. Een webapp kan niet 's nachts draaien als hij dicht is. */
+async function autoBackup(){if(!CFG||!CFG.haBackup||!window._dirtyAt)return;const last=CFG.haBackupOk||0;if(window._dirtyAt<=last||Date.now()-last<10*60e3)return;try{await haBackup(true)}catch(e){}}
+if(typeof document!=='undefined'&&!(window.__TEST__)){document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')autoBackup()});setInterval(autoBackup,30*60e3)}
+function backupWarn(){if(!CFG||!CFG.url||!CFG.token)return'';if(!CFG.haBackup)return`<div class="banner warn">Je gegevens staan alleen op deze telefoon. Zet de back-up naar Home Assistant aan bij Gezondheid → Koppeling beheren.</div>`;
+  const age=CFG.haBackupOk?Date.now()-CFG.haBackupOk:Infinity;if(CFG.haBackupErr&&age>24*3600e3)return`<div class="banner warn row sp"><span>Back-up naar Home Assistant mislukt: ${E(CFG.haBackupErr)}</span><button class="btn sm" data-a="h_bknow">Opnieuw</button></div>`;
+  if(age>3*864e5)return`<div class="banner warn row sp"><span>Laatste back-up ${CFG.haBackupOk?'is '+Math.floor(age/864e5)+' dagen oud':'ontbreekt nog'}.</span><button class="btn sm" data-a="h_bknow">Nu maken</button></div>`;return''}
 async function haBackup(force){if(!CFG||!CFG.url||!CFG.token||!CFG.haBackup||bkBusy||typeof S==='undefined'||!S.profile)return{skip:true};
   if(!force&&CFG.haBackupOk&&Date.now()-CFG.haBackupOk<20*3600e3)return{skip:true};bkBusy=true;
   try{const key='taurus_coach_'+slug(S.profile.name);const n=(S.workouts||[]).length;if(!n)throw new Error('Nog geen trainingen; er wordt niets overschreven.');
     const prev=await wsRun(CFG,{type:'frontend/get_user_data',key});if(prev&&prev.value){try{const pn=(JSON.parse(prev.value).workouts||[]).length;if(pn>n)throw new Error(`Home Assistant heeft een vollere back-up (${pn} trainingen, hier ${n}). Herstel die eerst via het welkomstscherm of Instellingen.`)}catch(e){if(/vollere/.test(e.message))throw e}}
+    if(prev&&prev.value&&(!CFG.haPrevOk||Date.now()-CFG.haPrevOk>20*3600e3)){await wsRun(CFG,{type:'frontend/set_user_data',key:key+'_vorige',value:prev.value});CFG.haPrevOk=Date.now()}
     const txt=JSON.stringify(backupPayload());await wsRun(CFG,{type:'frontend/set_user_data',key,value:txt});
     CFG.haBackupOk=Date.now();CFG.haBackupErr='';CFG.haBackupKB=Math.round(txt.length/1024);await saveCfg();bkBusy=false;return{ok:true,kb:CFG.haBackupKB}}
   catch(e){CFG.haBackupErr=e.message;await saveCfg();bkBusy=false;return{err:e.message}}}
 async function listHABackups(url,token){const c={url:normUrl(url),token:(token||'').trim()};if(!c.token)throw new Error('Plak je toegangstoken.');
   const r=await wsRun(c,{type:'frontend/get_user_data'});const all=(r&&r.value)||{};const out=[];
-  for(const k in all){if(!k.startsWith('taurus_coach_'))continue;try{const d=JSON.parse(all[k]);out.push({key:k,name:(d.profile&&d.profile.name)||k.slice(13),at:d.exported,n:(d.workouts||[]).length,data:all[k]})}catch(e){}}
+  for(const k in all){if(!k.startsWith('taurus_coach_'))continue;try{const d=JSON.parse(all[k]);out.push({key:k,name:((d.profile&&d.profile.name)||k.slice(13))+(k.endsWith('_vorige')?' (vorige versie)':''),at:d.exported,n:(d.workouts||[]).length,data:all[k]})}catch(e){}}
   return{c,list:out}}
 let RB=null;
 function restoreSheet(){sheet(`<h2>Herstellen uit Home Assistant</h2><div class="small mut">Werkt als de automatische back-up naar Home Assistant aan stond. Je token staat in Home Assistant onder je profiel → Beveiliging (maak zo nodig een nieuw).</div>
@@ -377,6 +393,6 @@ function exportData(){return HD?{v:1,series:HD.series,daily:HD.daily}:null}
 async function importData(d){if(!d||!d.series)return 0;let n=0;for(const m in d.series){if(!METRICS[m]||!Array.isArray(d.series[m]))continue;n+=addSamples(m,d.series[m].filter(p=>Array.isArray(p)&&isFinite(p[0])&&isFinite(p[1])))}
   for(const m in (d.daily||{})){if(!METRICS[m])continue;const t=HD.daily[m]||(HD.daily[m]={});for(const k in d.daily[m])if(t[k]==null&&isFinite(d.daily[m][k]))t[k]=d.daily[m][k]}await saveHD();return n}
 
-window.HEALTH={haWS:async msg=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Niet gekoppeld met Home Assistant.');return wsRun(CFG,msg)},hasHA:()=>!!(CFG&&CFG.url&&CFG.token),range,haBackup,restoreSheet,METRICS,haGet:async p=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Koppel eerst Home Assistant (Gezondheid → Koppelen).');return ha(p)},pushState,load,sync,autoSync,view,todayCard,settingsCard,answer,insights,recovery,readiness,weekStats,hrBlock,linkWorkout,exportData,importData,configured,
-  _t:{normUrl,discover,score,addSamples,days,trend,conv,plausible,wWindow,hrFor,linkAll,setState:(c,h)=>{CFG={...emptyCfg(),...c};HD={...emptyHD(),...h}},get HD(){return HD},get CFG(){return CFG}}};
+window.HEALTH={haWS:async msg=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Niet gekoppeld met Home Assistant.');return wsRun(CFG,msg)},hasHA:()=>!!(CFG&&CFG.url&&CFG.token),range,haBackup,restoreSheet,METRICS,haGet:async p=>{if(!CFG||!CFG.url||!CFG.token)throw new Error('Koppel eerst Home Assistant (Gezondheid → Koppelen).');return ha(p)},pushState,load,sync,autoSync,view,todayCard,settingsCard,answer,insights,recovery,readiness,weekStats,backupWarn,autoBackup,hrBlock,linkWorkout,exportData,importData,configured,
+  _t:{encodePair,decodePair,pairGo,setWS:f=>{wsImpl=f},normUrl,discover,score,addSamples,days,trend,conv,plausible,wWindow,hrFor,linkAll,setState:(c,h)=>{CFG={...emptyCfg(),...c};HD={...emptyHD(),...h}},get HD(){return HD},get CFG(){return CFG}}};
 })();
